@@ -1,98 +1,117 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Href, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+import { useTheme } from "@/hooks/use-theme";
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const theme = useTheme();
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
+      <View style={styles.header}>
+        <Text style={[styles.kicker, { color: theme.accent }]}>VAULT</Text>
+        <Text style={[styles.title, { color: theme.text }]}>My Vault</Text>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+          A quiet place for the subjects and topics you want to keep.
+        </Text>
+      </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      <TouchableOpacity
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.backgroundElement,
+            borderColor: theme.border,
+          },
+        ]}
+        activeOpacity={0.85}
+        onPress={() => router.push("/subjects" as Href)}
+      >
+        <View
+          style={[styles.iconWrap, { backgroundColor: theme.accentMuted }]}
+        >
+          <Text style={styles.cardIcon}>📚</Text>
+        </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        <View style={styles.cardCopy}>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>
+            Subjects
+          </Text>
+          <Text style={[styles.cardDescription, { color: theme.textSecondary }]}>
+            Organize topics and open your notes in one tap.
+          </Text>
+        </View>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    paddingHorizontal: 24,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+  header: {
+    marginTop: 28,
+    marginBottom: 36,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  kicker: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 2.4,
+    marginBottom: 10,
   },
   title: {
-    textAlign: 'center',
+    fontSize: 36,
+    fontWeight: "700",
+    letterSpacing: -0.6,
   },
-  code: {
-    textTransform: 'uppercase',
+  subtitle: {
+    marginTop: 10,
+    fontSize: 16,
+    lineHeight: 24,
+    maxWidth: 320,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  iconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardIcon: {
+    fontSize: 24,
+  },
+  cardCopy: {
+    flex: 1,
+    marginHorizontal: 14,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  cardDescription: {
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chevron: {
+    fontSize: 28,
+    fontWeight: "300",
+    marginTop: -2,
   },
 });
