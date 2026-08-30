@@ -4,6 +4,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+
 import {
   ActivityIndicator,
   Modal,
@@ -14,67 +15,188 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import * as Clipboard from "expo-clipboard";
 import Toast from "react-native-toast-message";
 import { useFocusEffect } from "expo-router";
 
 import { AppLayout } from "@/components/AppLayout";
+
 import {
   getPasscodes,
   createPasscode,
   updatePasscode,
   deletePasscode,
+  forceRefresh,
 } from "@/api/api";
+
 import { useTheme } from "@/hooks/use-theme";
+import { useVault } from "@/contexts/VaultContext";
+
+/* =====================================================
+   TYPES
+===================================================== */
+
+type EncryptedPassword = {
+  ciphertext: string;
+  nonce: string;
+  authTag: string;
+};
 
 type Passcode = {
   _id: string;
   platform: string;
   username: string;
-  password?: string;
+  password?: EncryptedPassword;
+  decryptedPassword?: string;
   securityAnswer?: string;
   updatedAt?: string;
   srNo?: number;
 };
 
-type SortOption =
-  | "newest"
-  | "oldest"
-  | "az"
-  | "za";
+type SortOption = "newest" | "oldest" | "az" | "za";
 
 const DEFAULT_PAGE_SIZE = 20;
 
+const PASSCODE_ENDPOINT = "/passcodes";
+
+
+/* =====================================================
+   NORMALIZE BACKEND PASSWORD
+===================================================== */
+
+const normalizeEncryptedPassword = (
+  password: any
+): EncryptedPassword | undefined => {
+  if (
+    !password ||
+    typeof password !== "object"
+  ) {
+    return undefined;
+  }
+
+  /*
+   * IMPORTANT:
+   *
+   * vaultCrypto.ts uses `nonce`,
+   * NOT `iv`.
+   */
+  if (
+    typeof password.ciphertext !==
+      "string" ||
+    typeof password.nonce !==
+      "string" ||
+    typeof password.authTag !==
+      "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    ciphertext:
+      password.ciphertext,
+
+    nonce:
+      password.nonce,
+
+    authTag:
+      password.authTag,
+  };
+};
+
+/* =====================================================
+   DECRYPT PASSCODE
+===================================================== */
+
+const decryptPasscode = async (
+  item: any,
+  decryptPasswordFn: (encrypted: EncryptedPassword) => Promise<string>
+): Promise<Passcode> => {
+  const encryptedPassword =
+    normalizeEncryptedPassword(
+      item.password
+    );
+
+  let decryptedPassword = "";
+
+  if (encryptedPassword) {
+    try {
+      decryptedPassword =
+        await decryptPasswordFn(encryptedPassword);
+    } catch (error) {
+      console.log(
+        "PASSWORD DECRYPT ERROR:",
+        error
+      );
+
+      decryptedPassword = "";
+    }
+  }
+
+  return {
+    ...item,
+
+    password:
+      encryptedPassword,
+
+    decryptedPassword,
+  };
+};
+
+/* =====================================================
+   SCREEN
+===================================================== */
+
 export default function PasscodesScreen() {
   const theme = useTheme();
+  const { encryptPassword, decryptPassword } = useVault();
 
-  // =====================================================
-  // STATE
-  // =====================================================
+  /* ===================================================
+     STATE
+  =================================================== */
 
-  const [passcodes, setPasscodes] = useState<Passcode[]>(
-    []
-  );
+  const [passcodes, setPasscodes] =
+    useState<Passcode[]>([]);
 
-  const [platform, setPlatform] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [platform, setPlatform] =
+    useState("");
 
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [updating, setUpdating] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [username, setUsername] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [creating, setCreating] =
+    useState(false);
+
+  const [updating, setUpdating] =
+    useState(false);
+
+  const [deleting, setDeleting] =
+    useState(false);
 
   const [showForm, setShowForm] =
     useState(false);
 
   const [revealedIds, setRevealedIds] =
-    useState<Set<string>>(new Set());
+    useState<Set<string>>(
+      new Set()
+    );
 
   const [copiedField, setCopiedField] =
     useState<string | null>(null);
 
-  const [editingPasscode, setEditingPasscode] =
+  const [
+    editingPasscode,
+    setEditingPasscode,
+  ] =
     useState<Passcode | null>(null);
 
   const [editUsername, setEditUsername] =
@@ -83,22 +205,29 @@ export default function PasscodesScreen() {
   const [editPassword, setEditPassword] =
     useState("");
 
-  const [deleteConfirmId, setDeleteConfirmId] =
+  const [
+    deleteConfirmId,
+    setDeleteConfirmId,
+  ] =
     useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] =
+    useState("");
 
   const [sortOption, setSortOption] =
     useState<SortOption>("newest");
 
-  const [showSortOptions, setShowSortOptions] =
-    useState(false);
+  const [
+    showSortOptions,
+    setShowSortOptions,
+  ] = useState(false);
 
-  // =====================================================
-  // PAGINATION STATE
-  // =====================================================
+  /* ===================================================
+     PAGINATION
+  =================================================== */
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] =
+    useState(1);
 
   const [pageSize] =
     useState(DEFAULT_PAGE_SIZE);
@@ -112,41 +241,92 @@ export default function PasscodesScreen() {
   const [hasNextPage, setHasNextPage] =
     useState(false);
 
-  const [hasPreviousPage, setHasPreviousPage] =
-    useState(false);
+  const [
+    hasPreviousPage,
+    setHasPreviousPage,
+  ] = useState(false);
 
-  const [initialLoadDone, setInitialLoadDone] =
-    useState(false);
+  const [
+    initialLoadDone,
+    setInitialLoadDone,
+  ] = useState(false);
 
-  // =====================================================
-  // FETCH PAGE
-  // =====================================================
+  /* ===================================================
+     FETCH PAGE
+  =================================================== */
 
   const fetchPage = useCallback(
     async (
       requestedPage: number,
       requestedPageSize: number,
       searchValue: string,
-      requestedSort: SortOption
+      requestedSort: SortOption,
+      forceFresh = false
     ) => {
       try {
-        setLoading(true);
+        if (forceFresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
 
-        const response =
-          await getPasscodes({
-            page: requestedPage,
-            limit: requestedPageSize,
-            search: searchValue.trim(),
-            sort: requestedSort,
-          });
+        const params = {
+          page: requestedPage,
+          limit: requestedPageSize,
 
-        const data: Passcode[] =
+          ...(searchValue.trim()
+            ? {
+                search:
+                  searchValue.trim(),
+              }
+            : {}),
+
+          sort: requestedSort,
+        };
+
+        let response;
+
+        if (forceFresh) {
+          response =
+            await forceRefresh(
+              PASSCODE_ENDPOINT,
+              {
+                params,
+              }
+            );
+        } else {
+          response =
+            await getPasscodes(
+              params
+            );
+        }
+
+        const rawData =
           response?.data?.data || [];
+
+        /*
+         * Backend sends only encrypted
+         * password data.
+         *
+         * Decrypt locally using vault key in memory.
+         */
+        const decryptedData =
+          await Promise.all(
+            rawData.map(
+              (item: any) =>
+                decryptPasscode(
+                  item,
+                  decryptPassword
+                )
+            )
+          );
 
         const pagination =
           response?.data?.pagination;
 
-        setPasscodes(data);
+        setPasscodes(
+          decryptedData
+        );
 
         const returnedPage =
           pagination?.page ??
@@ -169,7 +349,9 @@ export default function PasscodesScreen() {
             )
           );
 
-        setPage(returnedPage);
+        setPage(
+          returnedPage
+        );
 
         setTotalRecords(
           returnedTotal
@@ -190,8 +372,10 @@ export default function PasscodesScreen() {
             returnedPage > 1
         );
 
-        setInitialLoadDone(true);
-      } catch (error) {
+        setInitialLoadDone(
+          true
+        );
+      } catch (error: any) {
         console.log(
           "GET PASSCODES ERROR:",
           error
@@ -199,19 +383,51 @@ export default function PasscodesScreen() {
 
         Toast.show({
           type: "error",
-          text1: "Unable to load passcodes",
-          text2: "Please try again.",
+
+          text1:
+            "Unable to load passcodes",
+
+          text2:
+            error?.message ||
+            "Please unlock your vault and try again.",
         });
       } finally {
         setLoading(false);
+        setRefreshing(false);
       }
     },
     []
   );
 
-  // =====================================================
-  // INITIAL / FOCUS LOAD
-  // =====================================================
+  /* ===================================================
+     REFRESH
+  =================================================== */
+
+  const handleRefresh =
+    useCallback(async () => {
+      if (refreshing) {
+        return;
+      }
+
+      await fetchPage(
+        page,
+        pageSize,
+        search,
+        sortOption,
+        true
+      );
+    }, [
+      refreshing,
+      fetchPage,
+      page,
+      pageSize,
+      search,
+      sortOption,
+    ]);
+
+  /* ===================================================
+     FOCUS LOAD
+  =================================================== */
 
   useFocusEffect(
     useCallback(() => {
@@ -219,7 +435,8 @@ export default function PasscodesScreen() {
         1,
         pageSize,
         search,
-        sortOption
+        sortOption,
+        true
       );
     }, [
       fetchPage,
@@ -229,23 +446,25 @@ export default function PasscodesScreen() {
     ])
   );
 
-  // =====================================================
-  // SEARCH
-  // =====================================================
+  /* ===================================================
+     SEARCH
+  =================================================== */
 
   useEffect(() => {
     if (!initialLoadDone) {
       return;
     }
 
-    const timer = setTimeout(() => {
-      fetchPage(
-        1,
-        pageSize,
-        search,
-        sortOption
-      );
-    }, 350);
+    const timer =
+      setTimeout(() => {
+        fetchPage(
+          1,
+          pageSize,
+          search,
+          sortOption,
+          false
+        );
+      }, 350);
 
     return () =>
       clearTimeout(timer);
@@ -257,152 +476,194 @@ export default function PasscodesScreen() {
     sortOption,
   ]);
 
-  // =====================================================
-  // GO TO PREVIOUS PAGE
-  // =====================================================
+  /* ===================================================
+     PREVIOUS
+  =================================================== */
 
-  const goToPreviousPage = async () => {
-    if (
-      loading ||
-      !hasPreviousPage ||
-      page <= 1
-    ) {
-      return;
-    }
-
-    await fetchPage(
-      page - 1,
-      pageSize,
-      search,
-      sortOption
-    );
-  };
-
-  // =====================================================
-  // GO TO NEXT PAGE
-  // =====================================================
-
-  const goToNextPage = async () => {
-    if (
-      loading ||
-      !hasNextPage ||
-      page >= totalPages
-    ) {
-      return;
-    }
-
-    await fetchPage(
-      page + 1,
-      pageSize,
-      search,
-      sortOption
-    );
-  };
-
-  // =====================================================
-  // SORT LABEL
-  // =====================================================
-
-  const sortLabel = useMemo(() => {
-    switch (sortOption) {
-      case "oldest":
-        return "Oldest";
-
-      case "az":
-        return "Platform A–Z";
-
-      case "za":
-        return "Platform Z–A";
-
-      case "newest":
-      default:
-        return "Newest";
-    }
-  }, [sortOption]);
-
-  // =====================================================
-  // CREATE
-  // =====================================================
-
-  const handleCreate = async () => {
-    if (
-      !platform.trim() ||
-      !username.trim() ||
-      !password
-    ) {
-      Toast.show({
-        type: "info",
-        text1: "Missing fields",
-        text2:
-          "Please enter platform, username and password.",
-      });
-
-      return;
-    }
-
-    try {
-      setCreating(true);
-
-      const savedPlatform =
-        platform.trim();
-
-      await createPasscode({
-        platform: savedPlatform,
-        username: username.trim(),
-        password,
-      });
-
-      setPlatform("");
-      setUsername("");
-      setPassword("");
-
-      setShowForm(false);
+  const goToPreviousPage =
+    async () => {
+      if (
+        loading ||
+        refreshing ||
+        !hasPreviousPage ||
+        page <= 1
+      ) {
+        return;
+      }
 
       await fetchPage(
-        1,
+        page - 1,
         pageSize,
         search,
-        sortOption
+        sortOption,
+        false
       );
+    };
 
-      Toast.show({
-        type: "success",
-        text1: "Passcode saved",
-        text2:
-          `${savedPlatform} was added successfully.`,
-      });
-    } catch (error) {
-      console.log(
-        "CREATE PASSCODE ERROR:",
-        error
+  /* ===================================================
+     NEXT
+  =================================================== */
+
+  const goToNextPage =
+    async () => {
+      if (
+        loading ||
+        refreshing ||
+        !hasNextPage ||
+        page >= totalPages
+      ) {
+        return;
+      }
+
+      await fetchPage(
+        page + 1,
+        pageSize,
+        search,
+        sortOption,
+        false
       );
+    };
 
-      Toast.show({
-        type: "error",
-        text1: "Save failed",
-        text2:
-          "Unable to save passcode.",
-      });
-    } finally {
-      setCreating(false);
-    }
-  };
+  /* ===================================================
+     SORT LABEL
+  =================================================== */
 
-  // =====================================================
-  // CANCEL CREATE
-  // =====================================================
+  const sortLabel =
+    useMemo(() => {
+      switch (sortOption) {
+        case "oldest":
+          return "Oldest";
+
+        case "az":
+          return "Platform A–Z";
+
+        case "za":
+          return "Platform Z–A";
+
+        case "newest":
+        default:
+          return "Newest";
+      }
+    }, [sortOption]);
+
+  /* ===================================================
+     CREATE
+  =================================================== */
+
+  const handleCreate =
+    async () => {
+      if (
+        !platform.trim() ||
+        !username.trim() ||
+        !password
+      ) {
+        Toast.show({
+          type: "info",
+
+          text1:
+            "Missing fields",
+
+          text2:
+            "Please enter platform, username and password.",
+        });
+
+        return;
+      }
+
+      try {
+        setCreating(true);
+
+        /*
+         * Encrypt password BEFORE sending to backend.
+         */
+        const encryptedPassword =
+          await encryptPassword(password);
+
+        const savedPlatform =
+          platform.trim();
+
+        await createPasscode({
+          platform:
+            savedPlatform,
+
+          username:
+            username.trim(),
+
+          /*
+           * Plain password is NEVER sent.
+           */
+          password:
+            encryptedPassword,
+        });
+
+        /*
+         * Clear form.
+         */
+        setPlatform("");
+        setUsername("");
+        setPassword("");
+
+        setShowForm(false);
+
+        /*
+         * Backend POST should clear
+         * relevant cache.
+         */
+        await fetchPage(
+          1,
+          pageSize,
+          search,
+          sortOption,
+          false
+        );
+
+        Toast.show({
+          type: "success",
+
+          text1:
+            "Passcode saved",
+
+          text2:
+            `${savedPlatform} was added successfully.`,
+        });
+      } catch (error: any) {
+        console.log(
+          "CREATE PASSCODE ERROR:",
+          error?.response?.data ||
+            error
+        );
+
+        Toast.show({
+          type: "error",
+
+          text1:
+            "Save failed",
+
+          text2:
+            error?.response?.data
+              ?.message ||
+            error?.message ||
+            "Unable to save passcode.",
+        });
+      } finally {
+        setCreating(false);
+      }
+    };
+
+  /* ===================================================
+     CANCEL CREATE
+  =================================================== */
 
   const cancelCreate = () => {
     setPlatform("");
     setUsername("");
     setPassword("");
-
     setShowForm(false);
   };
 
-  // =====================================================
-  // EDIT
-  // =====================================================
+  /* ===================================================
+     EDIT
+  =================================================== */
 
   const handleEdit = (
     item: Passcode
@@ -413,94 +674,146 @@ export default function PasscodesScreen() {
       item.username
     );
 
+    /*
+     * Password is already decrypted
+     * in memory.
+     */
     setEditPassword(
-      item.password || ""
+      item.decryptedPassword ||
+        ""
     );
   };
 
-  // =====================================================
-  // UPDATE
-  // =====================================================
+  /* ===================================================
+     UPDATE
+  =================================================== */
 
-  const handleUpdate = async () => {
-    if (!editingPasscode) {
-      return;
-    }
-
-    if (
-      !editUsername.trim() ||
-      !editPassword.trim()
-    ) {
-      Toast.show({
-        type: "info",
-        text1: "Missing fields",
-        text2:
-          "Username and password are required.",
-      });
-
-      return;
-    }
-
-    try {
-      setUpdating(true);
-
-      const response =
-        await updatePasscode(
-          editingPasscode._id,
-          {
-            username:
-              editUsername.trim(),
-
-            password:
-              editPassword,
-          }
-        );
-
-      const updated =
-        response?.data?.data;
-
-      if (updated) {
-        setPasscodes((current) =>
-          current.map((item) =>
-            item._id ===
-            editingPasscode._id
-              ? updated
-              : item
-          )
-        );
+  const handleUpdate =
+    async () => {
+      if (!editingPasscode) {
+        return;
       }
 
-      setEditingPasscode(null);
+      if (
+        !editUsername.trim() ||
+        !editPassword.trim()
+      ) {
+        Toast.show({
+          type: "info",
 
-      setEditUsername("");
-      setEditPassword("");
+          text1:
+            "Missing fields",
 
-      Toast.show({
-        type: "success",
-        text1: "Passcode updated",
-        text2:
-          "Your credentials updated successfully.",
-      });
-    } catch (error) {
-      console.log(
-        "UPDATE PASSCODE ERROR:",
-        error
-      );
+          text2:
+            "Username and password are required.",
+        });
 
-      Toast.show({
-        type: "error",
-        text1: "Update failed",
-        text2:
-          "Unable to update passcode.",
-      });
-    } finally {
-      setUpdating(false);
-    }
-  };
+        return;
+      }
 
-  // =====================================================
-  // DELETE
-  // =====================================================
+      try {
+        setUpdating(true);
+
+        /*
+         * Get current vault key.
+         */
+        /*
+         * Encrypt edited password.
+         */
+        const encryptedPassword =
+          await encryptPassword(editPassword);
+
+        const response =
+          await updatePasscode(
+            editingPasscode._id,
+            {
+              username:
+                editUsername.trim(),
+
+              /*
+               * Plain password is NEVER sent.
+               */
+              password:
+                encryptedPassword,
+            }
+          );
+
+        const updated =
+          response?.data?.data;
+
+        /*
+         * Update local UI immediately.
+         */
+        if (updated) {
+          const decryptedUpdated =
+            await decryptPasscode(
+              updated,
+              decryptPassword
+            );
+
+          setPasscodes(
+            current =>
+              current.map(
+                item =>
+                  item._id ===
+                  editingPasscode._id
+                    ? decryptedUpdated
+                    : item
+              )
+          );
+        }
+
+        setEditingPasscode(null);
+        setEditUsername("");
+        setEditPassword("");
+
+        /*
+         * PUT should clear cache.
+         */
+        await fetchPage(
+          page,
+          pageSize,
+          search,
+          sortOption,
+          false
+        );
+
+        Toast.show({
+          type: "success",
+
+          text1:
+            "Passcode updated",
+
+          text2:
+            "Your credentials were updated successfully.",
+        });
+      } catch (error: any) {
+        console.log(
+          "UPDATE PASSCODE ERROR:",
+          error?.response?.data ||
+            error
+        );
+
+        Toast.show({
+          type: "error",
+
+          text1:
+            "Update failed",
+
+          text2:
+            error?.response?.data
+              ?.message ||
+            error?.message ||
+            "Unable to update passcode.",
+        });
+      } finally {
+        setUpdating(false);
+      }
+    };
+
+  /* ===================================================
+     DELETE
+  =================================================== */
 
   const handleDelete = (
     id: string
@@ -508,68 +821,78 @@ export default function PasscodesScreen() {
     setDeleteConfirmId(id);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteConfirmId) {
-      return;
-    }
+  const confirmDelete =
+    async () => {
+      if (!deleteConfirmId) {
+        return;
+      }
 
-    try {
-      setDeleting(true);
+      try {
+        setDeleting(true);
 
-      await deletePasscode(
-        deleteConfirmId
-      );
+        await deletePasscode(
+          deleteConfirmId
+        );
 
-      const targetPage =
-        page > 1 &&
-        passcodes.length === 1
-          ? page - 1
-          : page;
+        const targetPage =
+          page > 1 &&
+          passcodes.length === 1
+            ? page - 1
+            : page;
 
-      setDeleteConfirmId(null);
+        setDeleteConfirmId(
+          null
+        );
 
-      await fetchPage(
-        targetPage,
-        pageSize,
-        search,
-        sortOption
-      );
+        await fetchPage(
+          targetPage,
+          pageSize,
+          search,
+          sortOption,
+          false
+        );
 
-      Toast.show({
-        type: "success",
-        text1: "Passcode deleted",
-        text2:
-          "The passcode was removed successfully.",
-      });
-    } catch (error: any) {
-      console.log(
-        "DELETE PASSCODE ERROR:",
-        error?.response?.data ||
-          error
-      );
+        Toast.show({
+          type: "success",
 
-      Toast.show({
-        type: "error",
-        text1: "Delete failed",
-        text2:
-          error?.response?.data
-            ?.message ||
-          "Unable to delete passcode.",
-      });
-    } finally {
-      setDeleting(false);
-    }
-  };
+          text1:
+            "Passcode deleted",
 
-  // =====================================================
-  // PASSWORD REVEAL
-  // =====================================================
+          text2:
+            "The passcode was removed successfully.",
+        });
+      } catch (error: any) {
+        console.log(
+          "DELETE PASSCODE ERROR:",
+          error?.response?.data ||
+            error
+        );
+
+        Toast.show({
+          type: "error",
+
+          text1:
+            "Delete failed",
+
+          text2:
+            error?.response?.data
+              ?.message ||
+            "Unable to delete passcode.",
+        });
+      } finally {
+        setDeleting(false);
+      }
+    };
+
+  /* ===================================================
+     REVEAL
+  =================================================== */
 
   const toggleReveal = (
     id: string
   ) => {
     setRevealedIds(
-      (previous) => {
+      previous => {
         const next =
           new Set(previous);
 
@@ -584,50 +907,61 @@ export default function PasscodesScreen() {
     );
   };
 
-  // =====================================================
-  // COPY
-  // =====================================================
+  /* ===================================================
+     COPY
+  =================================================== */
 
-  const copyToClipboard = async (
-    value: string,
-    fieldId: string,
-    fieldName: string
-  ) => {
-    try {
-      await Clipboard.setStringAsync(
-        value
-      );
+  const copyToClipboard =
+    async (
+      value: string,
+      fieldId: string,
+      fieldName: string
+    ) => {
+      try {
+        await Clipboard.setStringAsync(
+          value
+        );
 
-      setCopiedField(fieldId);
+        setCopiedField(
+          fieldId
+        );
 
-      Toast.show({
-        type: "success",
-        text1: "Copied",
-        text2:
-          `${fieldName} copied to clipboard.`,
-      });
+        Toast.show({
+          type: "success",
 
-      setTimeout(() => {
-        setCopiedField(null);
-      }, 1500);
-    } catch (error) {
-      console.log(
-        "COPY ERROR:",
-        error
-      );
+          text1:
+            "Copied",
 
-      Toast.show({
-        type: "error",
-        text1: "Copy failed",
-        text2:
-          "Unable to copy to clipboard.",
-      });
-    }
-  };
+          text2:
+            `${fieldName} copied to clipboard.`,
+        });
 
-  // =====================================================
-  // PLATFORM ICON
-  // =====================================================
+        setTimeout(() => {
+          setCopiedField(
+            null
+          );
+        }, 1500);
+      } catch (error) {
+        console.log(
+          "COPY ERROR:",
+          error
+        );
+
+        Toast.show({
+          type: "error",
+
+          text1:
+            "Copy failed",
+
+          text2:
+            "Unable to copy to clipboard.",
+        });
+      }
+    };
+
+  /* ===================================================
+     PLATFORM ICON
+  =================================================== */
 
   const getPlatformIcon = (
     platformName: string
@@ -670,15 +1004,21 @@ export default function PasscodesScreen() {
       return "🔍";
     }
 
-    if (name.includes("amazon")) {
+    if (
+      name.includes("amazon")
+    ) {
       return "📦";
     }
 
-    if (name.includes("netflix")) {
+    if (
+      name.includes("netflix")
+    ) {
       return "🎬";
     }
 
-    if (name.includes("spotify")) {
+    if (
+      name.includes("spotify")
+    ) {
       return "🎵";
     }
 
@@ -699,16 +1039,18 @@ export default function PasscodesScreen() {
     return "🔐";
   };
 
-  // =====================================================
-  // RENDER CARD
-  // =====================================================
+  /* ===================================================
+     RENDER CARD
+  =================================================== */
 
   const renderPasscode = (
     item: Passcode,
     index: number
   ) => {
     const isRevealed =
-      revealedIds.has(item._id);
+      revealedIds.has(
+        item._id
+      );
 
     const usernameCopied =
       copiedField ===
@@ -732,11 +1074,17 @@ export default function PasscodesScreen() {
           },
         ]}
       >
+        {/* CARD HEADER */}
+
         <View
-          style={styles.cardHeader}
+          style={
+            styles.cardHeader
+          }
         >
           <View
-            style={styles.platformSection}
+            style={
+              styles.platformSection
+            }
           >
             <View
               style={[
@@ -814,6 +1162,8 @@ export default function PasscodesScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* USERNAME */}
 
         <View
           style={[
@@ -912,6 +1262,8 @@ export default function PasscodesScreen() {
           </View>
         </View>
 
+        {/* PASSWORD */}
+
         <View
           style={[
             styles.credentialRow,
@@ -949,7 +1301,7 @@ export default function PasscodesScreen() {
               numberOfLines={1}
             >
               {isRevealed
-                ? item.password ||
+                ? item.decryptedPassword ||
                   ""
                 : "••••••••"}
             </Text>
@@ -1000,21 +1352,23 @@ export default function PasscodesScreen() {
               ]}
               onPress={() => {
                 if (
-                  !item.password
+                  !item.decryptedPassword
                 ) {
                   Toast.show({
                     type: "info",
+
                     text1:
                       "No password",
+
                     text2:
-                      "This passcode has no password stored.",
+                      "Unable to decrypt this password.",
                   });
 
                   return;
                 }
 
                 copyToClipboard(
-                  item.password,
+                  item.decryptedPassword,
                   `${item._id}-password`,
                   "Password"
                 );
@@ -1033,6 +1387,8 @@ export default function PasscodesScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* FOOTER */}
 
         <View
           style={[
@@ -1065,7 +1421,9 @@ export default function PasscodesScreen() {
                 },
               ]}
             >
-              {formatTimeAgo(item.updatedAt)}
+              {formatTimeAgo(
+                item.updatedAt
+              )}
             </Text>
           )}
         </View>
@@ -1073,149 +1431,158 @@ export default function PasscodesScreen() {
     );
   };
 
-  // =====================================================
-  // UI
-  // =====================================================
+  /* ===================================================
+     UI
+  =================================================== */
 
   return (
     <AppLayout>
-       <View style={{ padding: 10, flex: 1}}>
-      <View style={styles.container}>
+      <View
+        style={{
+          padding: 10,
+          flex: 1,
+        }}
+      >
         <View
-          style={styles.pageHeader}
+          style={
+            styles.container
+          }
         >
-          <View
-            style={styles.titleSection}
-          >
-            <Text
-              style={[
-                styles.pageTitle,
-                {
-                  color:
-                    theme.text,
-                },
-              ]}
-            >
-              Passcodes
-            </Text>
-
-            <Text
-              style={[
-                styles.pageSubtitle,
-                {
-                  color:
-                    theme.textSecondary,
-                },
-              ]}
-            >
-              Securely manage your
-              login credentials
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={() =>
-              setShowForm(true)
-            }
-            style={[
-              styles.headerSaveButton,
-              {
-                backgroundColor:
-                  theme.accent,
-              },
-            ]}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={
-                styles.headerSaveText
-              }
-            >
-              + Save Passcode
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View
-          style={styles.toolbar}
-        >
-          <View
-            style={[
-              styles.searchContainer,
-              {
-                backgroundColor:
-                  theme.backgroundElement,
-
-                borderColor:
-                  theme.border,
-              },
-            ]}
-          >
-            <Text
-              style={
-                styles.searchIcon
-              }
-            >
-              🔎
-            </Text>
-
-            <TextInput
-              value={search}
-              onChangeText={
-                setSearch
-              }
-              placeholder=" search platform or username"
-              placeholderTextColor={
-                theme.textSecondary
-              }
-              style={[
-                styles.searchInput,
-                {
-                  color:
-                    theme.text,
-                },
-              ]}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            {search.length > 0 && (
-              <TouchableOpacity
-                onPress={() =>
-                  setSearch("")
-                }
-                style={
-                  styles.clearSearch
-                }
-              >
-                <Text
-                  style={[
-                    styles.clearSearchText,
-                    {
-                      color:
-                        theme.textSecondary,
-                    },
-                  ]}
-                >
-                  ✕
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {/* PAGE HEADER */}
 
           <View
             style={
-              styles.sortWrapper
+              styles.pageHeader
             }
           >
-            <TouchableOpacity
-              onPress={() =>
-                setShowSortOptions(
-                  (value) => !value
-                )
+            <View
+              style={
+                styles.titleSection
               }
+            >
+              <Text
+                style={[
+                  styles.pageTitle,
+                  {
+                    color:
+                      theme.text,
+                  },
+                ]}
+              >
+                Passcodes
+              </Text>
+
+              <Text
+                style={[
+                  styles.pageSubtitle,
+                  {
+                    color:
+                      theme.textSecondary,
+                  },
+                ]}
+              >
+                Securely manage your
+                login credentials
+              </Text>
+            </View>
+
+            <View
+              style={
+                styles.headerActions
+              }
+            >
+              <TouchableOpacity
+                onPress={
+                  handleRefresh
+                }
+                disabled={
+                  refreshing
+                }
+                style={[
+                  styles.refreshButton,
+                  {
+                    backgroundColor:
+                      theme.backgroundElement,
+
+                    borderColor:
+                      theme.border,
+                  },
+
+                  refreshing &&
+                    styles.disabledButton,
+                ]}
+                activeOpacity={0.7}
+              >
+                {refreshing ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={
+                      theme.accent
+                    }
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.refreshIcon,
+                      {
+                        color:
+                          theme.text,
+                      },
+                    ]}
+                  >
+                    ↻
+                  </Text>
+                )}
+
+                <Text
+                  style={[
+                    styles.refreshText,
+                    {
+                      color:
+                        theme.text,
+                    },
+                  ]}
+                >
+                  Refresh
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() =>
+                  setShowForm(true)
+                }
+                style={[
+                  styles.headerSaveButton,
+                  {
+                    backgroundColor:
+                      theme.accent,
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={
+                    styles.headerSaveText
+                  }
+                >
+                  + Save Passcode
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* TOOLBAR */}
+
+          <View
+            style={
+              styles.toolbar
+            }
+          >
+            {/* SEARCH */}
+
+            <View
               style={[
-                styles.sortButton,
+                styles.searchContainer,
                 {
                   backgroundColor:
                     theme.backgroundElement,
@@ -1224,546 +1591,926 @@ export default function PasscodesScreen() {
                     theme.border,
                 },
               ]}
-              activeOpacity={0.7}
             >
               <Text
                 style={
-                  styles.sortIcon
+                  styles.searchIcon
                 }
               >
-                ⇅
+                🔎
               </Text>
 
-              <Text
+              <TextInput
+                value={search}
+                onChangeText={
+                  setSearch
+                }
+                placeholder="Search platform or username"
+                placeholderTextColor={
+                  theme.textSecondary
+                }
                 style={[
-                  styles.sortButtonText,
+                  styles.searchInput,
                   {
                     color:
                       theme.text,
                   },
                 ]}
-              >
-                {sortLabel}
-              </Text>
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
 
-              <Text
-                style={[
-                  styles.sortArrow,
-                  {
-                    color:
-                      theme.textSecondary,
-                  },
-                ]}
-              >
-                {showSortOptions
-                  ? "⌃"
-                  : "⌄"}
-              </Text>
-            </TouchableOpacity>
-
-            {showSortOptions && (
-              <View
-                style={[
-                  styles.sortDropdown,
-                  {
-                    backgroundColor:
-                      theme.backgroundElement,
-
-                    borderColor:
-                      theme.border,
-                  },
-                ]}
-              >
-                {(
-                  [
-                    [
-                      "newest",
-                      "Newest",
-                    ],
-                    [
-                      "oldest",
-                      "Oldest",
-                    ],
-                    [
-                      "az",
-                      "Platform A–Z",
-                    ],
-                    [
-                      "za",
-                      "Platform Z–A",
-                    ],
-                  ] as [
-                    SortOption,
-                    string
-                  ][]
-                ).map(
-                  ([value, label]) => {
-                    const selected =
-                      sortOption ===
-                      value;
-
-                    return (
-                      <TouchableOpacity
-                        key={value}
-                        style={[
-                          styles.sortOption,
-                          selected && {
-                            backgroundColor:
-                              theme.background,
-                          },
-                        ]}
-                        onPress={() => {
-                          setSortOption(
-                            value
-                          );
-                          setShowSortOptions(
-                            false
-                          );
-
-                          fetchPage(
-                            1,
-                            pageSize,
-                            search,
-                            value
-                          );
-                        }}
-                        activeOpacity={
-                          0.7
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.sortOptionText,
-                            {
-                              color:
-                                selected
-                                  ? theme.accent
-                                  : theme.text,
-                            },
-                          ]}
-                        >
-                          {label}
-                        </Text>
-
-                        {selected && (
-                          <Text
-                            style={[
-                              styles.checkIcon,
-                              {
-                                color:
-                                  theme.accent,
-                              },
-                            ]}
-                          >
-                            ✓
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    );
+              {search.length > 0 && (
+                <TouchableOpacity
+                  onPress={() =>
+                    setSearch("")
                   }
-                )}
-              </View>
-            )}
-          </View>
-
-          {/* =================================================
-              INLINE PAGINATION
-          ================================================= */}
-
-          {!loading && totalRecords > 0 && (
-            <View
-              style={
-                styles.paginationInline
-              }
-            >
-              <Text
-                style={[
-                  styles.recordCountText,
-                  {
-                    color:
-                      theme.textSecondary,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                
-              </Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.paginationIconButton,
-                  {
-                    backgroundColor:
-                      theme.backgroundElement,
-
-                    borderColor:
-                      theme.border,
-                  },
-
-                  (!hasPreviousPage ||
-                    loading) &&
-                    styles.paginationDisabled,
-                ]}
-                onPress={
-                  goToPreviousPage
-                }
-                disabled={
-                  !hasPreviousPage ||
-                  loading
-                }
-                activeOpacity={
-                  0.7
-                }
-              >
-                <Text
-                  style={[
-                    styles.paginationIcon,
-                    {
-                      color:
-                        hasPreviousPage &&
-                        !loading
-                          ? theme.text
-                          : theme.textSecondary,
-                    },
-                  ]}
+                  style={
+                    styles.clearSearch
+                  }
                 >
-                  ‹
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.paginationIconButton,
-                  {
-                    backgroundColor:
-                      theme.backgroundElement,
-
-                    borderColor:
-                      theme.border,
-                  },
-
-                  (!hasNextPage ||
-                    loading) &&
-                    styles.paginationDisabled,
-                ]}
-                onPress={
-                  goToNextPage
-                }
-                disabled={
-                  !hasNextPage ||
-                  loading
-                }
-                activeOpacity={
-                  0.7
-                }
-              >
-                <Text
-                  style={[
-                    styles.paginationIcon,
-                    {
-                      color:
-                        hasNextPage &&
-                        !loading
-                          ? theme.text
-                          : theme.textSecondary,
-                    },
-                  ]}
-                >
-                  ›
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.clearSearchText,
+                      {
+                        color:
+                          theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    ✕
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-        </View>
 
-        {showForm && (
-          <View
-            style={[
-              styles.formCard,
-              {
-                backgroundColor:
-                  theme.backgroundElement,
+            {/* SORT */}
 
-                borderColor:
-                  theme.border,
-              },
-            ]}
-          >
             <View
               style={
-                styles.formHeader
+                styles.sortWrapper
               }
             >
-              <View>
+              <TouchableOpacity
+                onPress={() =>
+                  setShowSortOptions(
+                    value =>
+                      !value
+                  )
+                }
+                style={[
+                  styles.sortButton,
+                  {
+                    backgroundColor:
+                      theme.backgroundElement,
+
+                    borderColor:
+                      theme.border,
+                  },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={
+                    styles.sortIcon
+                  }
+                >
+                  ⇅
+                </Text>
+
                 <Text
                   style={[
-                    styles.formTitle,
+                    styles.sortButtonText,
                     {
                       color:
                         theme.text,
                     },
                   ]}
                 >
-                  Save Passcode
+                  {sortLabel}
                 </Text>
 
                 <Text
                   style={[
-                    styles.formSubtitle,
+                    styles.sortArrow,
                     {
                       color:
                         theme.textSecondary,
                     },
                   ]}
                 >
-                  Add your login
-                  credentials
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={
-                  cancelCreate
-                }
-                style={
-                  styles.cancelButton
-                }
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.cancelText,
-                    {
-                      color:
-                        theme.textSecondary,
-                    },
-                  ]}
-                >
-                  Cancel
+                  {showSortOptions
+                    ? "⌃"
+                    : "⌄"}
                 </Text>
               </TouchableOpacity>
+
+              {showSortOptions && (
+                <View
+                  style={[
+                    styles.sortDropdown,
+                    {
+                      backgroundColor:
+                        theme.backgroundElement,
+
+                      borderColor:
+                        theme.border,
+                    },
+                  ]}
+                >
+                  {(
+                    [
+                      [
+                        "newest",
+                        "Newest",
+                      ],
+                      [
+                        "oldest",
+                        "Oldest",
+                      ],
+                      [
+                        "az",
+                        "Platform A–Z",
+                      ],
+                      [
+                        "za",
+                        "Platform Z–A",
+                      ],
+                    ] as [
+                      SortOption,
+                      string
+                    ][]
+                  ).map(
+                    ([
+                      value,
+                      label,
+                    ]) => {
+                      const selected =
+                        sortOption ===
+                        value;
+
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          style={[
+                            styles.sortOption,
+                            selected && {
+                              backgroundColor:
+                                theme.background,
+                            },
+                          ]}
+                          onPress={() => {
+                            setSortOption(
+                              value
+                            );
+
+                            setShowSortOptions(
+                              false
+                            );
+
+                            fetchPage(
+                              1,
+                              pageSize,
+                              search,
+                              value,
+                              false
+                            );
+                          }}
+                          activeOpacity={
+                            0.7
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.sortOptionText,
+                              {
+                                color:
+                                  selected
+                                    ? theme.accent
+                                    : theme.text,
+                              },
+                            ]}
+                          >
+                            {label}
+                          </Text>
+
+                          {selected && (
+                            <Text
+                              style={[
+                                styles.checkIcon,
+                                {
+                                  color:
+                                    theme.accent,
+                                },
+                              ]}
+                            >
+                              ✓
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    }
+                  )}
+                </View>
+              )}
             </View>
 
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color:
-                    theme.text,
+            {/* PAGINATION */}
 
-                  borderColor:
-                    theme.border,
-
-                  backgroundColor:
-                    theme.background,
-                },
-              ]}
-              placeholder="Platform e.g. Instagram"
-              placeholderTextColor={
-                theme.textSecondary
-              }
-              value={platform}
-              onChangeText={
-                setPlatform
-              }
-              autoCapitalize="words"
-            />
-
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color:
-                    theme.text,
-
-                  borderColor:
-                    theme.border,
-
-                  backgroundColor:
-                    theme.background,
-                },
-              ]}
-              placeholder="Username / Email"
-              placeholderTextColor={
-                theme.textSecondary
-              }
-              value={username}
-              onChangeText={
-                setUsername
-              }
-              autoCapitalize="none"
-            />
-
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color:
-                    theme.text,
-
-                  borderColor:
-                    theme.border,
-
-                  backgroundColor:
-                    theme.background,
-                },
-              ]}
-              placeholder="Password"
-              placeholderTextColor={
-                theme.textSecondary
-              }
-              value={password}
-              onChangeText={
-                setPassword
-              }
-              secureTextEntry
-              autoCapitalize="none"
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                {
-                  backgroundColor:
-                    theme.accent,
-                },
-
-                creating &&
-                  styles.disabledButton,
-              ]}
-              onPress={
-                handleCreate
-              }
-              disabled={creating}
-              activeOpacity={0.8}
-            >
-              {creating ? (
-                <ActivityIndicator
-                  color="#fff"
-                />
-              ) : (
-                <Text
+            {!loading &&
+              totalRecords > 0 && (
+                <View
                   style={
-                    styles.saveButtonText
+                    styles.paginationInline
                   }
                 >
-                  Save Passcode
-                </Text>
+                  <Text
+                    style={[
+                      styles.recordCountText,
+                      {
+                        color:
+                          theme.textSecondary,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {page} /{" "}
+                    {totalPages}
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.paginationIconButton,
+                      {
+                        backgroundColor:
+                          theme.backgroundElement,
+
+                        borderColor:
+                          theme.border,
+                      },
+
+                      (!hasPreviousPage ||
+                        loading ||
+                        refreshing) &&
+                        styles.paginationDisabled,
+                    ]}
+                    onPress={
+                      goToPreviousPage
+                    }
+                    disabled={
+                      !hasPreviousPage ||
+                      loading ||
+                      refreshing
+                    }
+                    activeOpacity={
+                      0.7
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.paginationIcon,
+                        {
+                          color:
+                            hasPreviousPage &&
+                            !loading &&
+                            !refreshing
+                              ? theme.text
+                              : theme.textSecondary,
+                        },
+                      ]}
+                    >
+                      ‹
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.paginationIconButton,
+                      {
+                        backgroundColor:
+                          theme.backgroundElement,
+
+                        borderColor:
+                          theme.border,
+                      },
+
+                      (!hasNextPage ||
+                        loading ||
+                        refreshing) &&
+                        styles.paginationDisabled,
+                    ]}
+                    onPress={
+                      goToNextPage
+                    }
+                    disabled={
+                      !hasNextPage ||
+                      loading ||
+                      refreshing
+                    }
+                    activeOpacity={
+                      0.7
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.paginationIcon,
+                        {
+                          color:
+                            hasNextPage &&
+                            !loading &&
+                            !refreshing
+                              ? theme.text
+                              : theme.textSecondary,
+                        },
+                      ]}
+                    >
+                      ›
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
-            </TouchableOpacity>
           </View>
-        )}
 
-        {loading ? (
-          <View
-            style={
-              styles.loadingContainer
-            }
-          >
-            <ActivityIndicator
-              size="large"
-              color={
-                theme.accent
-              }
-            />
+          {/* CREATE FORM */}
 
-            <Text
+          {showForm && (
+            <View
               style={[
-                styles.loadingText,
+                styles.formCard,
                 {
-                  color:
-                    theme.textSecondary,
+                  backgroundColor:
+                    theme.backgroundElement,
+
+                  borderColor:
+                    theme.border,
                 },
               ]}
             >
-              Loading passcodes...
-            </Text>
-          </View>
-        ) : passcodes.length === 0 ? (
-          <View
-            style={
-              styles.emptyState
-            }
-          >
-            <Text
+              <View
+                style={
+                  styles.formHeader
+                }
+              >
+                <View>
+                  <Text
+                    style={[
+                      styles.formTitle,
+                      {
+                        color:
+                          theme.text,
+                      },
+                    ]}
+                  >
+                    Save Passcode
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.formSubtitle,
+                      {
+                        color:
+                          theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    Add your login
+                    credentials
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={
+                    cancelCreate
+                  }
+                  style={
+                    styles.cancelButton
+                  }
+                  activeOpacity={
+                    0.7
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.cancelText,
+                      {
+                        color:
+                          theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color:
+                      theme.text,
+
+                    borderColor:
+                      theme.border,
+
+                    backgroundColor:
+                      theme.background,
+                  },
+                ]}
+                placeholder="Platform e.g. Instagram"
+                placeholderTextColor={
+                  theme.textSecondary
+                }
+                value={platform}
+                onChangeText={
+                  setPlatform
+                }
+                autoCapitalize="words"
+              />
+
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color:
+                      theme.text,
+
+                    borderColor:
+                      theme.border,
+
+                    backgroundColor:
+                      theme.background,
+                  },
+                ]}
+                placeholder="Username / Email"
+                placeholderTextColor={
+                  theme.textSecondary
+                }
+                value={username}
+                onChangeText={
+                  setUsername
+                }
+                autoCapitalize="none"
+              />
+
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color:
+                      theme.text,
+
+                    borderColor:
+                      theme.border,
+
+                    backgroundColor:
+                      theme.background,
+                  },
+                ]}
+                placeholder="Password"
+                placeholderTextColor={
+                  theme.textSecondary
+                }
+                value={password}
+                onChangeText={
+                  setPassword
+                }
+                secureTextEntry
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  {
+                    backgroundColor:
+                      theme.accent,
+                  },
+
+                  creating &&
+                    styles.disabledButton,
+                ]}
+                onPress={
+                  handleCreate
+                }
+                disabled={
+                  creating
+                }
+                activeOpacity={
+                  0.8
+                }
+              >
+                {creating ? (
+                  <ActivityIndicator
+                    color="#fff"
+                  />
+                ) : (
+                  <Text
+                    style={
+                      styles.saveButtonText
+                    }
+                  >
+                    Save Passcode
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* LOADING */}
+
+          {loading ? (
+            <View
               style={
-                styles.emptyIcon
+                styles.loadingContainer
               }
             >
-              🔐
-            </Text>
+              <ActivityIndicator
+                size="large"
+                color={
+                  theme.accent
+                }
+              />
 
-            <Text
-              style={[
-                styles.emptyTitle,
-                {
-                  color:
-                    theme.text,
-                },
-              ]}
-            >
-              {search
-                ? "No matching passcodes"
-                : "No passcodes yet"}
-            </Text>
+              <Text
+                style={[
+                  styles.loadingText,
+                  {
+                    color:
+                      theme.textSecondary,
+                  },
+                ]}
+              >
+                Loading passcodes...
+              </Text>
+            </View>
+          ) : passcodes.length ===
+            0 ? (
+            /* EMPTY */
 
-            <Text
-              style={[
-                styles.emptyText,
-                {
-                  color:
-                    theme.textSecondary,
-                },
-              ]}
+            <View
+              style={
+                styles.emptyState
+              }
             >
-              {search
-                ? "Try another platform or username."
-                : 'Tap "Save Passcode" to add your first credential.'}
-            </Text>
-          </View>
-        ) : (
-          <ScrollView
-            style={styles.listScroll}
-            contentContainerStyle={
-              styles.list
+              <Text
+                style={
+                  styles.emptyIcon
+                }
+              >
+                🔐
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color:
+                      theme.text,
+                  },
+                ]}
+              >
+                {search
+                  ? "No matching passcodes"
+                  : "No passcodes yet"}
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyText,
+                  {
+                    color:
+                      theme.textSecondary,
+                  },
+                ]}
+              >
+                {search
+                  ? "Try another platform or username."
+                  : 'Tap "Save Passcode" to add your first credential.'}
+              </Text>
+            </View>
+          ) : (
+            /* LIST */
+
+            <ScrollView
+              style={
+                styles.listScroll
+              }
+              contentContainerStyle={
+                styles.list
+              }
+              showsVerticalScrollIndicator={
+                false
+              }
+            >
+              <View
+                style={
+                  styles.cardsGrid
+                }
+              >
+                {passcodes.map(
+                  (
+                    item,
+                    index
+                  ) =>
+                    renderPasscode(
+                      item,
+                      index
+                    )
+                )}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* EDIT MODAL */}
+
+          <Modal
+            visible={
+              !!editingPasscode
             }
-            showsVerticalScrollIndicator={
-              false
+            transparent
+            animationType="fade"
+            onRequestClose={() =>
+              setEditingPasscode(
+                null
+              )
             }
           >
             <View
               style={
-                styles.cardsGrid
+                styles.modalOverlay
               }
             >
-              {passcodes.map(
-                (item, index) =>
-                  renderPasscode(
-                    item,
-                    index
-                  )
+              {editingPasscode && (
+                <View
+                  style={[
+                    styles.editModal,
+                    {
+                      backgroundColor:
+                        theme.backgroundElement,
+                    },
+                  ]}
+                >
+                  <View
+                    style={
+                      styles.modalTop
+                    }
+                  >
+                    <View
+                      style={
+                        styles.modalIconCircle
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.modalIcon
+                        }
+                      >
+                        ✏️
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() =>
+                        setEditingPasscode(
+                          null
+                        )
+                      }
+                      style={
+                        styles.modalCloseButton
+                      }
+                      activeOpacity={
+                        0.7
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.modalCloseText,
+                          {
+                            color:
+                              theme.textSecondary,
+                          },
+                        ]}
+                      >
+                        ✕
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.modalTitle,
+                      {
+                        color:
+                          theme.text,
+                      },
+                    ]}
+                  >
+                    Edit passcode
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.modalSubtitle,
+                      {
+                        color:
+                          theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    Update your login
+                    details for{" "}
+                    <Text
+                      style={{
+                        fontWeight:
+                          "700",
+                        color:
+                          theme.text,
+                      }}
+                    >
+                      {
+                        editingPasscode.platform
+                      }
+                    </Text>
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {
+                        color:
+                          theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    USERNAME
+                  </Text>
+
+                  <TextInput
+                    style={[
+                      styles.modalInput,
+                      {
+                        color:
+                          theme.text,
+
+                        backgroundColor:
+                          theme.background,
+
+                        borderColor:
+                          theme.border,
+                      },
+                    ]}
+                    placeholder="Username / Email"
+                    placeholderTextColor={
+                      theme.textSecondary
+                    }
+                    value={
+                      editUsername
+                    }
+                    onChangeText={
+                      setEditUsername
+                    }
+                    autoCapitalize="none"
+                  />
+
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {
+                        color:
+                          theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    PASSWORD
+                  </Text>
+
+                  <TextInput
+                    style={[
+                      styles.modalInput,
+                      {
+                        color:
+                          theme.text,
+
+                        backgroundColor:
+                          theme.background,
+
+                        borderColor:
+                          theme.border,
+                      },
+                    ]}
+                    placeholder="Password"
+                    placeholderTextColor={
+                      theme.textSecondary
+                    }
+                    value={
+                      editPassword
+                    }
+                    onChangeText={
+                      setEditPassword
+                    }
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+
+                  <View
+                    style={
+                      styles.modalActions
+                    }
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.modalCancelButton,
+                        {
+                          borderColor:
+                            theme.border,
+                        },
+                      ]}
+                      onPress={() =>
+                        setEditingPasscode(
+                          null
+                        )
+                      }
+                      activeOpacity={
+                        0.7
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.modalCancelText,
+                          {
+                            color:
+                              theme.text,
+                          },
+                        ]}
+                      >
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.modalUpdateButton,
+                        {
+                          backgroundColor:
+                            theme.accent,
+                        },
+
+                        updating &&
+                          styles.disabledButton,
+                      ]}
+                      onPress={
+                        handleUpdate
+                      }
+                      disabled={
+                        updating
+                      }
+                      activeOpacity={
+                        0.8
+                      }
+                    >
+                      {updating ? (
+                        <ActivityIndicator
+                          color="#fff"
+                        />
+                      ) : (
+                        <Text
+                          style={
+                            styles.modalUpdateText
+                          }
+                        >
+                          Save changes
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
               )}
             </View>
-          </ScrollView>
-        )}
+          </Modal>
 
-        {/* =================================================
-            EDIT MODAL
-        ================================================= */}
+          {/* DELETE MODAL */}
 
-        <Modal
-          visible={!!editingPasscode}
-          transparent
-          animationType="fade"
-          onRequestClose={() =>
-            setEditingPasscode(null)
-          }
-        >
-          <View style={styles.modalOverlay}>
-            {editingPasscode && (
+          <Modal
+            visible={
+              !!deleteConfirmId
+            }
+            transparent
+            animationType="fade"
+            onRequestClose={() =>
+              setDeleteConfirmId(
+                null
+              )
+            }
+          >
+            <View
+              style={
+                styles.modalOverlay
+              }
+            >
               <View
                 style={[
-                  styles.editModal,
+                  styles.deleteModal,
                   {
                     backgroundColor:
                       theme.backgroundElement,
@@ -1772,26 +2519,31 @@ export default function PasscodesScreen() {
               >
                 <View
                   style={
-                    styles.modalTop
+                    styles.deleteModalTop
                   }
                 >
                   <View
-                    style={
-                      styles.modalIconCircle
-                    }
+                    style={[
+                      styles.deleteIconCircle,
+                      {
+                        backgroundColor:
+                          theme.danger +
+                          "18",
+                      },
+                    ]}
                   >
                     <Text
                       style={
-                        styles.modalIcon
+                        styles.deleteModalIcon
                       }
                     >
-                      ✏️
+                      🗑
                     </Text>
                   </View>
 
                   <TouchableOpacity
                     onPress={() =>
-                      setEditingPasscode(
+                      setDeleteConfirmId(
                         null
                       )
                     }
@@ -1825,7 +2577,7 @@ export default function PasscodesScreen() {
                     },
                   ]}
                 >
-                  Edit passcode
+                  Delete passcode?
                 </Text>
 
                 <Text
@@ -1837,100 +2589,41 @@ export default function PasscodesScreen() {
                     },
                   ]}
                 >
-                  Update your login
-                  details for{" "}
+                  This passcode will be
+                  permanently removed.
+                  This action cannot be
+                  undone.
+                </Text>
+
+                <View
+                  style={[
+                    styles.warningBox,
+                    {
+                      backgroundColor:
+                        theme.danger +
+                        "0D",
+
+                      borderColor:
+                        theme.danger +
+                        "25",
+                    },
+                  ]}
+                >
                   <Text
-                    style={{
-                      fontWeight:
-                        "700",
-                      color:
-                        theme.text,
-                    }}
+                    style={[
+                      styles.warningText,
+                      {
+                        color:
+                          theme.text,
+                      },
+                    ]}
                   >
-                    {
-                      editingPasscode.platform
-                    }
+                    🔒 Your saved
+                    credentials will be
+                    deleted from your
+                    account.
                   </Text>
-                </Text>
-
-                <Text
-                  style={[
-                    styles.fieldLabel,
-                    {
-                      color:
-                        theme.textSecondary,
-                    },
-                  ]}
-                >
-                  USERNAME
-                </Text>
-
-                <TextInput
-                  style={[
-                    styles.modalInput,
-                    {
-                      color:
-                        theme.text,
-
-                      backgroundColor:
-                        theme.background,
-
-                      borderColor:
-                        theme.border,
-                    },
-                  ]}
-                  placeholder="Username / Email"
-                  placeholderTextColor={
-                    theme.textSecondary
-                  }
-                  value={
-                    editUsername
-                  }
-                  onChangeText={
-                    setEditUsername
-                  }
-                  autoCapitalize="none"
-                />
-
-                <Text
-                  style={[
-                    styles.fieldLabel,
-                    {
-                      color:
-                        theme.textSecondary,
-                    },
-                  ]}
-                >
-                  PASSWORD
-                </Text>
-
-                <TextInput
-                  style={[
-                    styles.modalInput,
-                    {
-                      color:
-                        theme.text,
-
-                      backgroundColor:
-                        theme.background,
-
-                      borderColor:
-                        theme.border,
-                    },
-                  ]}
-                  placeholder="Password"
-                  placeholderTextColor={
-                    theme.textSecondary
-                  }
-                  value={
-                    editPassword
-                  }
-                  onChangeText={
-                    setEditPassword
-                  }
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
+                </View>
 
                 <View
                   style={
@@ -1946,7 +2639,7 @@ export default function PasscodesScreen() {
                       },
                     ]}
                     onPress={() =>
-                      setEditingPasscode(
+                      setDeleteConfirmId(
                         null
                       )
                     }
@@ -1963,264 +2656,58 @@ export default function PasscodesScreen() {
                         },
                       ]}
                     >
-                      Cancel
+                      Keep it
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[
-                      styles.modalUpdateButton,
+                      styles.modalDeleteButton,
                       {
                         backgroundColor:
-                          theme.accent,
+                          theme.danger,
                       },
 
-                      updating &&
+                      deleting &&
                         styles.disabledButton,
                     ]}
                     onPress={
-                      handleUpdate
+                      confirmDelete
                     }
                     disabled={
-                      updating
+                      deleting
                     }
                     activeOpacity={
                       0.8
                     }
                   >
-                    {updating ? (
+                    {deleting ? (
                       <ActivityIndicator
                         color="#fff"
                       />
                     ) : (
                       <Text
                         style={
-                          styles.modalUpdateText
+                          styles.modalDeleteText
                         }
                       >
-                        Save changes
+                        Delete permanently
                       </Text>
                     )}
                   </TouchableOpacity>
                 </View>
               </View>
-            )}
-          </View>
-        </Modal>
-
-        {/* =================================================
-            DELETE MODAL
-        ================================================= */}
-
-        <Modal
-          visible={!!deleteConfirmId}
-          transparent
-          animationType="fade"
-          onRequestClose={() =>
-            setDeleteConfirmId(null)
-          }
-        >
-          <View style={styles.modalOverlay}>
-            <View
-              style={[
-                styles.deleteModal,
-                {
-                  backgroundColor:
-                    theme.backgroundElement,
-                },
-              ]}
-            >
-              <View
-                style={
-                  styles.deleteModalTop
-                }
-              >
-                <View
-                  style={[
-                    styles.deleteIconCircle,
-                    {
-                      backgroundColor:
-                        theme.danger +
-                        "18",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={
-                      styles.deleteModalIcon
-                    }
-                  >
-                    🗑
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() =>
-                    setDeleteConfirmId(
-                      null
-                    )
-                  }
-                  style={
-                    styles.modalCloseButton
-                  }
-                  activeOpacity={
-                    0.7
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.modalCloseText,
-                      {
-                        color:
-                          theme.textSecondary,
-                      },
-                    ]}
-                  >
-                    ✕
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text
-                style={[
-                  styles.modalTitle,
-                  {
-                    color:
-                      theme.text,
-                  },
-                ]}
-              >
-                Delete passcode?
-              </Text>
-
-              <Text
-                style={[
-                  styles.modalSubtitle,
-                  {
-                    color:
-                      theme.textSecondary,
-                  },
-                ]}
-              >
-                This passcode will be
-                permanently removed.
-                This action cannot be
-                undone.
-              </Text>
-
-              <View
-                style={[
-                  styles.warningBox,
-                  {
-                    backgroundColor:
-                      theme.danger +
-                      "0D",
-
-                    borderColor:
-                      theme.danger +
-                      "25",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.warningText,
-                    {
-                      color:
-                        theme.text,
-                    },
-                  ]}
-                >
-                  🔒 Your saved
-                  credentials will be
-                  deleted from your
-                  account.
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.modalActions
-                }
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.modalCancelButton,
-                    {
-                      borderColor:
-                        theme.border,
-                    },
-                  ]}
-                  onPress={() =>
-                    setDeleteConfirmId(
-                      null
-                    )
-                  }
-                  activeOpacity={
-                    0.7
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.modalCancelText,
-                      {
-                        color:
-                          theme.text,
-                      },
-                    ]}
-                  >
-                    Keep it
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.modalDeleteButton,
-                    {
-                      backgroundColor:
-                        theme.danger,
-                    },
-
-                    deleting &&
-                      styles.disabledButton,
-                  ]}
-                  onPress={
-                    confirmDelete
-                  }
-                  disabled={
-                    deleting
-                  }
-                  activeOpacity={
-                    0.8
-                  }
-                >
-                  {deleting ? (
-                    <ActivityIndicator
-                      color="#fff"
-                    />
-                  ) : (
-                    <Text
-                      style={
-                        styles.modalDeleteText
-                      }
-                    >
-                      Delete permanently
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
             </View>
-          </View>
-        </Modal>
-      </View>
+          </Modal>
+        </View>
       </View>
     </AppLayout>
   );
 }
 
-// =====================================================
-// TIME AGO FORMAT
-// =====================================================
+/* =====================================================
+   TIME AGO
+===================================================== */
 
 const formatTimeAgo = (
   dateString: string
@@ -2229,7 +2716,8 @@ const formatTimeAgo = (
     const date =
       new Date(dateString);
 
-    const now = new Date();
+    const now =
+      new Date();
 
     const diffInSeconds =
       Math.floor(
@@ -2298,9 +2786,9 @@ const formatTimeAgo = (
   }
 };
 
-// =====================================================
-// STYLES
-// =====================================================
+/* =====================================================
+   STYLES
+===================================================== */
 
 const styles = StyleSheet.create({
   container: {
@@ -2331,6 +2819,34 @@ const styles = StyleSheet.create({
   pageSubtitle: {
     fontSize: 12,
     marginTop: 3,
+  },
+
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  refreshButton: {
+    height: 42,
+    paddingHorizontal: 12,
+    borderRadius: 11,
+    borderWidth: 1,
+    justifyContent:
+      "center",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+
+  refreshIcon: {
+    fontSize: 19,
+    fontWeight: "600",
+  },
+
+  refreshText: {
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   headerSaveButton: {
@@ -2465,10 +2981,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
   },
-
-  // ===================================================
-  // INLINE PAGINATION
-  // ===================================================
 
   paginationInline: {
     height: 45,

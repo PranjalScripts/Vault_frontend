@@ -7,7 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
+  useWindowDimensions
 } from "react-native";
 
 import { useFocusEffect } from "expo-router";

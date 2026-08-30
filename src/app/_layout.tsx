@@ -28,6 +28,8 @@ import {
   subscribeToAuthChanges,
 } from "@/api/api";
 
+import { VaultProvider } from "@/contexts/VaultContext";
+
 export default function RootLayout() {
   const colorScheme =
     useColorScheme();
@@ -280,18 +282,19 @@ export default function RootLayout() {
    */
 
   return (
-    <ThemeProvider
-      value={navigationTheme}
-    >
-      <StatusBar
-        style={
-          colorScheme === "dark"
-            ? "light"
-            : "dark"
-        }
-      />
+    <VaultProvider>
+      <ThemeProvider
+        value={navigationTheme}
+      >
+        <StatusBar
+          style={
+            colorScheme === "dark"
+              ? "light"
+              : "dark"
+          }
+        />
 
-      <Stack
+        <Stack
         screenOptions={{
           headerShadowVisible:
             false,
@@ -389,5 +392,6 @@ export default function RootLayout() {
 
       <Toast />
     </ThemeProvider>
+    </VaultProvider>
   );
 }

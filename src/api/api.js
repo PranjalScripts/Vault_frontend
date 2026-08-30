@@ -1,4 +1,3 @@
-
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
@@ -14,7 +13,11 @@ const API = axios.create({
   },
 });
 
-
+/*
+ * =========================================================
+ * API CACHE
+ * =========================================================
+ */
 
 const API_CACHE_TIME = 10 * 60 * 1000; // 10 minutes
 
@@ -35,6 +38,7 @@ const createCacheKey = (config) => {
 
   const authorization =
     config.headers?.Authorization ||
+    config.headers?.authorization ||
     API.defaults.headers.common.Authorization ||
     "";
 
@@ -62,11 +66,12 @@ export const clearApiCache = () => {
 export const clearApiCacheFor = (url) => {
   console.log(`🗑️ Clearing cache for: ${url}`);
 
-  for (const key of apiCache.keys()) {
-    /*
-     * Cache key contains the URL.
-     */
-    if (key.includes(`:${url}:`) || key.includes(`:${url}`)) {
+  for (const key of Array.from(apiCache.keys())) {
+    if (
+      key.includes(`:${url}:`) ||
+      key.endsWith(`:${url}`) ||
+      key.includes(`:${url}?`)
+    ) {
       apiCache.delete(key);
     }
   }
@@ -74,11 +79,32 @@ export const clearApiCacheFor = (url) => {
 
 /*
  * =========================================================
+ * CLEAR PASSCODE CACHE
+ * =========================================================
+ *
+ * Passcodes have multiple cache keys because of:
+ *
+ * page
+ * limit
+ * search
+ * sort
+ *
+ * Therefore we clear the entire /passcodes cache.
+ */
+
+export const clearPasscodeCache = () => {
+  console.log("🗑️ Clearing PASSCODE cache");
+
+  clearApiCacheFor("/passcodes");
+};
+
+/*
+ * =========================================================
  * FORCE REFRESH
  * =========================================================
  *
- * Clears the cache for a specific GET endpoint and
- * immediately makes a fresh API request.
+ * Clears cache for a specific GET endpoint and
+ * immediately performs a fresh API request.
  */
 
 export const forceRefresh = async (
@@ -147,6 +173,7 @@ export const saveAuthToken = async (token) => {
     console.warn(
       "⚠️ saveAuthToken called without a token"
     );
+
     return;
   }
 
@@ -185,10 +212,6 @@ export const saveAuthToken = async (token) => {
       error
     );
 
-    /*
-     * Do not leave Axios authenticated
-     * if saving the token failed.
-     */
     setAuthToken(null);
 
     throw error;
@@ -254,9 +277,6 @@ export const logout = async () => {
     /*
      * IMPORTANT:
      * Remove cached data when logging out.
-     *
-     * This prevents old user's data from
-     * remaining in memory.
      */
     clearApiCache();
 
@@ -293,13 +313,12 @@ export const logout = async () => {
     setAuthToken(null);
 
     /*
-     * Always clear cached data.
+     * Always clear cache.
      */
     clearApiCache();
 
     /*
-     * Always tell the application that
-     * the user is logged out.
+     * Always notify application.
      */
     notifyAuthChange(false);
 
@@ -328,8 +347,9 @@ export const googleLogin = (idToken) => {
 /*
  * Normal GET.
  *
- * Automatically cached for 10 minutes.
+ * Cached for 10 minutes.
  */
+
 export const getSubjects = () => {
   return API.get(
     "/subjects/getAll-subjects"
@@ -338,9 +358,8 @@ export const getSubjects = () => {
 
 /*
  * Force fresh subjects request.
- *
- * Useful for your Refresh button.
  */
+
 export const refreshSubjects = () => {
   return forceRefresh(
     "/subjects/getAll-subjects"
@@ -418,6 +437,7 @@ export const deleteTopic = (
 /**
  * @param {GetTodosParams} params
  */
+
 export const getTodos = ({
   page = 1,
   limit = 20,
@@ -427,20 +447,67 @@ export const getTodos = ({
     params: {
       page,
       limit,
-      ...(status && status !== "all" ? { status } : {}),
+      ...(status && status !== "all"
+        ? { status }
+        : {}),
     },
   });
 };
-export const createTodo = (todoData) => {
-  return API.post("/todos", todoData);
+
+export const createTodo = (
+  todoData
+) => {
+  return API.post(
+    "/todos",
+    todoData
+  );
 };
 
-export const updateTodo = (todoId, todoData) => {
-  return API.put(`/todos/${todoId}`, todoData);
+export const updateTodo = (
+  todoId,
+  todoData
+) => {
+  return API.put(
+    `/todos/${todoId}`,
+    todoData
+  );
 };
 
-export const deleteTodo = (todoId) => {
-  return API.delete(`/todos/${todoId}`);
+export const deleteTodo = (
+  todoId
+) => {
+  return API.delete(
+    `/todos/${todoId}`
+  );
+};
+
+/*
+ * =========================================================
+ * VAULT
+ * =========================================================
+ */
+
+/**
+ * @typedef {Object} VaultMetadata
+ * @property {string} salt
+ * @property {string} wrappedVaultKey
+ * @property {string} wrapNonce
+ * @property {string} wrapAuthTag
+ */
+
+/**
+ * @returns {Promise<import("axios").AxiosResponse>}
+ */
+export const getVault = () => {
+  return API.get("/vault");
+};
+
+/**
+ * @param {VaultMetadata} vaultData
+ * @returns {Promise<import("axios").AxiosResponse>}
+ */
+export const createVault = (vaultData) => {
+  return API.post("/vault", vaultData);
 };
 
 /*
@@ -448,6 +515,43 @@ export const deleteTodo = (todoId) => {
  * PASSCODES
  * =========================================================
  */
+
+/*
+ * =========================================================
+ * ENCRYPTED PASSWORD FORMAT
+ * =========================================================
+ *
+ * Backend expects:
+ *
+ * {
+ *   ciphertext: "...",
+ *   nonce: "...",
+ *   authTag: "..."
+ * }
+ *
+ * IMPORTANT:
+ * Do NOT use `iv`.
+ */
+
+/*
+ * =========================================================
+ * GET PASSCODES
+ * =========================================================
+ *
+ * Normal GET.
+ *
+ * Cached for 10 minutes.
+ *
+ * Every combination of:
+ *
+ * page
+ * limit
+ * search
+ * sort
+ *
+ * gets its own cache entry.
+ */
+
 export const getPasscodes = ({
   page = 1,
   limit = 20,
@@ -458,13 +562,84 @@ export const getPasscodes = ({
     params: {
       page,
       limit,
-      ...(search.trim() && {
-        search: search.trim(),
-      }),
+      ...(search.trim()
+        ? {
+            search: search.trim(),
+          }
+        : {}),
       sort,
     },
   });
 };
+
+/*
+ * =========================================================
+ * REFRESH PASSCODES
+ * =========================================================
+ *
+ * IMPORTANT:
+ *
+ * This bypasses the existing passcode cache.
+ *
+ * Use this when:
+ *
+ * - User pulls to refresh
+ * - User presses Refresh
+ * - Screen needs latest data
+ * - Returning to passcode screen
+ *
+ * Example:
+ *
+ * await refreshPasscodes({
+ *   page: 1,
+ *   limit: 20,
+ *   search: "",
+ *   sort: "newest"
+ * });
+ */
+
+export const refreshPasscodes = ({
+  page = 1,
+  limit = 20,
+  search = "",
+  sort = "newest",
+} = {}) => {
+  clearPasscodeCache();
+
+  return API.get("/passcodes", {
+    params: {
+      page,
+      limit,
+      ...(search.trim()
+        ? {
+            search: search.trim(),
+          }
+        : {}),
+      sort,
+    },
+  });
+};
+
+/*
+ * =========================================================
+ * CREATE PASSCODE
+ * =========================================================
+ *
+ * `password` MUST already be encrypted.
+ *
+ * Expected:
+ *
+ * {
+ *   platform: "Instagram",
+ *   username: "testuser",
+ *   password: {
+ *     ciphertext: "...",
+ *     nonce: "...",
+ *     authTag: "..."
+ *   }
+ * }
+ */
+
 export const createPasscode = (
   passcodeData
 ) => {
@@ -473,6 +648,26 @@ export const createPasscode = (
     passcodeData
   );
 };
+
+/*
+ * =========================================================
+ * UPDATE PASSCODE
+ * =========================================================
+ *
+ * If password is supplied, it MUST already be
+ * encrypted.
+ *
+ * Expected:
+ *
+ * {
+ *   username: "newusername",
+ *   password: {
+ *     ciphertext: "...",
+ *     nonce: "...",
+ *     authTag: "..."
+ *   }
+ * }
+ */
 
 export const updatePasscode = (
   id,
@@ -484,6 +679,12 @@ export const updatePasscode = (
   );
 };
 
+/*
+ * =========================================================
+ * DELETE PASSCODE
+ * =========================================================
+ */
+
 export const deletePasscode = (
   passcodeId
 ) => {
@@ -494,10 +695,67 @@ export const deletePasscode = (
 
 /*
  * =========================================================
- * AXIOS REQUEST INTERCEPTOR
+ * VAULT SECURITY
+ * =========================================================
+ */
+
+/*
+ * =========================================================
+ * GET VAULT CONFIG
  * =========================================================
  *
- * Before every request:
+ * Backend returns:
+ *
+ * {
+ *   hasVault: true,
+ *   vaultSalt: "...",
+ *   vaultVerifier: {
+ *     ciphertext: "...",
+ *     nonce: "...",
+ *     authTag: "..."
+ *   }
+ * }
+ *
+ * Raw vault password/key is NEVER returned.
+ */
+
+export const getVaultConfig = () => {
+  return API.get(
+    "/passcodes/vault"
+  );
+};
+
+/*
+ * =========================================================
+ * CREATE VAULT
+ * =========================================================
+ *
+ * vaultSalt:
+ * Random salt generated on frontend.
+ *
+ * vaultVerifier:
+ * Encrypted verifier.
+ *
+ * Raw vault password is NEVER sent.
+ */
+
+// export const createVault = (
+//   vaultSalt,
+//   vaultVerifier
+// ) => {
+//   return API.post(
+//     "/passcodes/vault",
+//     {
+//       vaultSalt,
+//       vaultVerifier,
+//     }
+//   );
+// };
+
+/*
+ * =========================================================
+ * AXIOS REQUEST INTERCEPTOR
+ * =========================================================
  *
  * GET
  *   → Check cache
@@ -530,8 +788,11 @@ API.interceptors.request.use(
           cached.timestamp;
 
         /*
-         * Cache is still valid.
+         * =================================================
+         * CACHE STILL VALID
+         * =================================================
          */
+
         if (
           age < API_CACHE_TIME
         ) {
@@ -540,16 +801,15 @@ API.interceptors.request.use(
           );
 
           /*
-           * Store cached response
-           * directly on config.
-           *
-           * The adapter will return this
-           * without making a network request.
+           * Return cached response
+           * without network request.
            */
+
           config.adapter = async () => {
             return {
               data: cached.data,
-              status: cached.status || 200,
+              status:
+                cached.status || 200,
               statusText:
                 cached.statusText || "OK",
               headers:
@@ -559,19 +819,21 @@ API.interceptors.request.use(
             };
           };
 
-          /*
-           * Mark this request as cached.
-           */
           config.__fromCache = true;
         } else {
           /*
-           * Cache expired.
+           * =================================================
+           * CACHE EXPIRED
+           * =================================================
            */
+
           console.log(
             `⏰ CACHE EXPIRED: ${config.url}`
           );
 
-          apiCache.delete(cacheKey);
+          apiCache.delete(
+            cacheKey
+          );
         }
       } else {
         console.log(
@@ -582,11 +844,11 @@ API.interceptors.request.use(
 
     /*
      * =====================================================
-     * DATABASE-MODIFYING REQUEST
+     * DATABASE MODIFYING REQUEST
      * =====================================================
      *
-     * Any POST / PUT / PATCH / DELETE means
-     * server-side data may have changed.
+     * Any mutation means server data may
+     * have changed.
      *
      * Clear all GET cache.
      */
@@ -640,7 +902,8 @@ API.interceptors.response.use(
 
       apiCache.set(cacheKey, {
         data: response.data,
-        status: response.status,
+        status:
+          response.status,
         statusText:
           response.statusText,
         headers:
@@ -658,11 +921,7 @@ API.interceptors.response.use(
      * DATABASE CHANGE
      * =====================================================
      *
-     * Clear cache again after successful mutation.
-     *
-     * This is intentionally done here too,
-     * so cache remains clean even if request
-     * interceptors are changed later.
+     * Clear cache after successful mutation.
      */
 
     if (
@@ -687,19 +946,21 @@ API.interceptors.response.use(
      * 401 AUTH ERROR
      * =====================================================
      *
-     * Backend returns 401
-     *       ↓
+     * Backend
+     *   ↓
+     * 401
+     *   ↓
      * Axios interceptor
-     *       ↓
+     *   ↓
      * logout()
-     *       ↓
+     *   ↓
      * Token removed
-     *       ↓
+     *   ↓
      * Cache removed
-     *       ↓
-     * RootLayout receives false
-     *       ↓
-     * User goes to login
+     *   ↓
+     * RootLayout notified
+     *   ↓
+     * Login screen
      */
 
     if (
@@ -724,4 +985,3 @@ API.interceptors.response.use(
 );
 
 export default API;
-

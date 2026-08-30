@@ -188,9 +188,7 @@ export default function OnboardingScreen() {
          * Ask Google to show the account chooser instead of
          * silently reusing the previous Google account.
          */
-        await promptAsync({
-          prompt: "select_account",
-        });
+        await promptAsync();
 
         return;
       }
