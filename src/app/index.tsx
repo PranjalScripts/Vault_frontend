@@ -1,6 +1,6 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Href, useRouter } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useTheme } from "@/hooks/use-theme";
@@ -11,107 +11,212 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      style={[styles.screen, { backgroundColor: theme.background }]}
     >
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: theme.accent }]}>VAULT</Text>
-        <Text style={[styles.title, { color: theme.text }]}>My Vault</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          A quiet place for the subjects and topics you want to keep.
-        </Text>
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <View style={styles.brand}>
+            <View style={[styles.brandMark, { backgroundColor: theme.accent }]}>
+              <View
+                style={[
+                  styles.brandMarkInner,
+                  { backgroundColor: theme.background },
+                ]}
+              />
+            </View>
+            <Text style={[styles.brandName, { color: theme.text }]}>vault</Text>
+          </View>
+          <Text style={[styles.headerLabel, { color: theme.textSecondary }]}>
+            YOUR SPACE
+          </Text>
+        </View>
+
+        <View style={styles.main}>
+          <View
+            style={[styles.eyebrow, { backgroundColor: theme.accentMuted }]}
+          >
+            <View style={[styles.dot, { backgroundColor: theme.accent }]} />
+            <Text style={[styles.eyebrowText, { color: theme.accent }]}>
+              A calmer way to learn
+            </Text>
+          </View>
+          <Text style={[styles.title, { color: theme.text }]}>
+            Keep what{`\n`}matters close.
+          </Text>
+          <Text style={[styles.description, { color: theme.textSecondary }]}>
+            A simple home for the subjects and ideas you want to return to.
+          </Text>
+
+          <View
+            style={[
+              styles.preview,
+              {
+                backgroundColor: theme.backgroundSelected,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <View
+              style={[styles.previewOrbit, { borderColor: theme.accent }]}
+            />
+            <View
+              style={[styles.previewCore, { backgroundColor: theme.accent }]}
+            />
+            <View
+              style={[
+                styles.previewCard,
+                {
+                  backgroundColor: theme.backgroundElement,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.previewLabel, { color: theme.textSecondary }]}
+              >
+                YOUR VAULT
+              </Text>
+              <Text style={[styles.previewTitle, { color: theme.text }]}>
+                Subjects
+              </Text>
+              <View
+                style={[
+                  styles.previewLine,
+                  { backgroundColor: theme.accentMuted },
+                ]}
+              />
+              <View style={styles.previewMeta}>
+                <View
+                  style={[styles.previewDot, { backgroundColor: "#D98F66" }]}
+                />
+                <Text
+                  style={[styles.previewText, { color: theme.textSecondary }]}
+                >
+                  Ideas worth keeping
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={[styles.footerNote, { color: theme.textSecondary }]}>
+            Your personal library, always within reach.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open your subjects"
+            onPress={() => router.push("/onboarding" as Href)}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: theme.accent, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Text style={styles.buttonText}>Open your vault</Text>
+            <Text style={styles.buttonArrow}>→</Text>
+          </Pressable>
+        </View>
       </View>
-
-      <TouchableOpacity
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.backgroundElement,
-            borderColor: theme.border,
-          },
-        ]}
-        activeOpacity={0.85}
-        onPress={() => router.push("/subjects" as Href)}
-      >
-        <View
-          style={[styles.iconWrap, { backgroundColor: theme.accentMuted }]}
-        >
-          <Text style={styles.cardIcon}>📚</Text>
-        </View>
-
-        <View style={styles.cardCopy}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>
-            Subjects
-          </Text>
-          <Text style={[styles.cardDescription, { color: theme.textSecondary }]}>
-            Organize topics and open your notes in one tap.
-          </Text>
-        </View>
-
-        <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
+  screen: { flex: 1 },
+  content: { flex: 1, paddingHorizontal: 24, paddingBottom: 18 },
   header: {
-    marginTop: 28,
-    marginBottom: 36,
-  },
-  kicker: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 2.4,
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: "700",
-    letterSpacing: -0.6,
-  },
-  subtitle: {
-    marginTop: 10,
-    fontSize: 16,
-    lineHeight: 24,
-    maxWidth: 320,
-  },
-  card: {
+    height: 64,
     flexDirection: "row",
     alignItems: "center",
-    padding: 18,
-    borderRadius: 20,
-    borderWidth: 1,
+    justifyContent: "space-between",
   },
-  iconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
+  brandMark: {
+    width: 27,
+    height: 27,
+    borderRadius: 8,
+    transform: [{ rotate: "45deg" }],
     alignItems: "center",
     justifyContent: "center",
   },
-  cardIcon: {
-    fontSize: 24,
+  brandMarkInner: { width: 10, height: 10, borderRadius: 3 },
+  brandName: { fontSize: 22, fontWeight: "700", letterSpacing: -0.8 },
+  headerLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1.4 },
+  main: { flex: 1, justifyContent: "center", paddingBottom: 18 },
+  eyebrow: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 18,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    marginBottom: 18,
   },
-  cardCopy: {
-    flex: 1,
-    marginHorizontal: 14,
-  },
-  cardTitle: {
-    fontSize: 18,
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  eyebrowText: { fontSize: 11, fontWeight: "700" },
+  title: {
+    fontSize: 46,
+    lineHeight: 48,
     fontWeight: "700",
+    letterSpacing: -1.8,
   },
-  cardDescription: {
-    marginTop: 4,
-    fontSize: 14,
-    lineHeight: 20,
+  description: { fontSize: 15, lineHeight: 23, marginTop: 18, maxWidth: 320 },
+  preview: {
+    height: 212,
+    marginTop: 30,
+    borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  chevron: {
-    fontSize: 28,
-    fontWeight: "300",
-    marginTop: -2,
+  previewOrbit: {
+    position: "absolute",
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    borderWidth: 1,
+    opacity: 0.45,
+    right: -74,
+    bottom: -104,
   },
+  previewCore: {
+    position: "absolute",
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    opacity: 0.12,
+    left: -66,
+    top: -74,
+  },
+  previewCard: {
+    width: "78%",
+    padding: 18,
+    borderWidth: 1,
+    transform: [{ rotate: "-3deg" }],
+  },
+  previewLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+    marginBottom: 17,
+  },
+  previewTitle: { fontSize: 25, fontWeight: "700", marginBottom: 16 },
+  previewLine: { height: 4, width: "70%", marginBottom: 13 },
+  previewMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
+  previewDot: { width: 8, height: 8, borderRadius: 4 },
+  previewText: { fontSize: 11 },
+  footer: { gap: 12 },
+  footerNote: { fontSize: 11 },
+  button: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    borderRadius: 4,
+  },
+  buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+  buttonArrow: { color: "#FFFFFF", fontSize: 22 },
 });

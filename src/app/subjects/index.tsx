@@ -2,16 +2,18 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, Stack } from "expo-router";
+import { AppLayout } from "@/components/AppLayout";
 
-import { createSubject, deleteSubject, getSubjects } from "@/api/api";
+import { createSubject, deleteSubject, getSubjects, logout } from "@/api/api";
 import { useTheme } from "@/hooks/use-theme";
 
 type Topic = {
@@ -25,6 +27,7 @@ type Subject = {
   _id: string;
   subjectName: string;
   topics: Topic[];
+  updatedAt?: string;
 };
 
 export default function SubjectsScreen() {
@@ -89,6 +92,13 @@ export default function SubjectsScreen() {
   };
 
   const handleDeleteSubject = (id: string) => {
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to delete this subject?")) {
+        deleteSubjectAndUpdateList(id);
+      }
+      return;
+    }
+
     Alert.alert(
       "Delete Subject",
       "Are you sure you want to delete this subject?",
@@ -100,26 +110,69 @@ export default function SubjectsScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteSubject(id);
-
-              setSubjects((currentSubjects) =>
-                currentSubjects.filter((subject) => subject._id !== id),
-              );
-            } catch (error) {
-              console.log("DELETE SUBJECT ERROR:", error);
-
-              Alert.alert("Error", "Unable to delete the subject.");
-            }
-          },
+          onPress: () => deleteSubjectAndUpdateList(id),
         },
       ],
     );
   };
 
-  const renderSubject = ({ item }: { item: Subject }) => {
+  const deleteSubjectAndUpdateList = async (id: string) => {
+    try {
+      await deleteSubject(id);
+
+      setSubjects((currentSubjects) =>
+        currentSubjects.filter((subject) => subject._id !== id),
+      );
+    } catch (error) {
+      console.log("DELETE SUBJECT ERROR:", error);
+
+      Alert.alert("Error", "Unable to delete the subject.");
+    }
+  };
+
+  const getSubjectIcon = (subjectName: string) => {
+    const name = subjectName.toLowerCase();
+    if (name.includes("spring") || name.includes("boot") || name.includes("java")) {
+      return "🌱";
+    } else if (name.includes("react") || name.includes("js") || name.includes("javascript")) {
+      return "⚛️";
+    } else if (name.includes("python") || name.includes("py")) {
+      return "🐍";
+    } else if (name.includes("data") || name.includes("database") || name.includes("sql")) {
+      return "🗄️";
+    } else if (name.includes("design") || name.includes("ui") || name.includes("ux")) {
+      return "🎨";
+    } else if (name.includes("web") || name.includes("html") || name.includes("css")) {
+      return "🌐";
+    } else if (name.includes("mobile") || name.includes("app") || name.includes("ios") || name.includes("android")) {
+      return "📱";
+    } else if (name.includes("security") || name.includes("auth") || name.includes("password")) {
+      return "🔒";
+    } else if (name.includes("algorithm") || name.includes("code") || name.includes("programming")) {
+      return "💻";
+    } else {
+      return "📁";
+    }
+  };
+
+  const formatUpdatedTime = (updatedAt?: string) => {
+    if (!updatedAt) return "";
+    const date = new Date(updatedAt);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Updated today";
+    if (diffDays === 1) return "Updated 1 day ago";
+    if (diffDays < 7) return `Updated ${diffDays} days ago`;
+    if (diffDays < 30) return `Updated ${Math.floor(diffDays / 7)} weeks ago`;
+    return `Updated ${Math.floor(diffDays / 30)} months ago`;
+  };
+
+  const renderSubject = (item: Subject) => {
     const topicCount = item.topics?.length || 0;
+    const subjectIcon = getSubjectIcon(item.subjectName);
+    const updatedTime = formatUpdatedTime(item.updatedAt);
 
     return (
       <TouchableOpacity
@@ -140,42 +193,47 @@ export default function SubjectsScreen() {
           })
         }
       >
-        <View
-          style={[styles.accentMark, { backgroundColor: theme.accent }]}
-        />
+        <View style={styles.subjectIconContainer}>
+          <Text style={styles.subjectIcon}>{subjectIcon}</Text>
+        </View>
 
         <View style={styles.subjectInfo}>
           <Text style={[styles.subjectName, { color: theme.text }]}>
             {item.subjectName}
           </Text>
 
-          <View
-            style={[
-              styles.countPill,
-              { backgroundColor: theme.accentMuted },
-            ]}
-          >
-            <Text style={[styles.topicCount, { color: theme.accent }]}>
+          <View style={styles.subjectMeta}>
+            <Text style={[styles.topicCount, { color: theme.textSecondary }]}>
               {topicCount} {topicCount === 1 ? "topic" : "topics"}
             </Text>
+            {updatedTime && (
+              <>
+                <Text style={[styles.metaSeparator, { color: theme.textSecondary }]}>•</Text>
+                <Text style={[styles.updatedTime, { color: theme.textSecondary }]}>
+                  {updatedTime}
+                </Text>
+              </>
+            )}
           </View>
         </View>
 
         <TouchableOpacity
-          style={styles.deleteButton}
+          style={styles.moreButton}
           onPress={() => handleDeleteSubject(item._id)}
           hitSlop={8}
         >
-          <Text style={[styles.deleteText, { color: theme.danger }]}>
-            Delete
-          </Text>
+          <Text style={[styles.moreIcon, { color: theme.textSecondary }]}>⋮</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <AppLayout
+      title="Subjects"
+      subtitle="Organize your subjects and their topics"
+      scrollable={false}
+    >
       <View
         style={[
           styles.createContainer,
@@ -186,8 +244,8 @@ export default function SubjectsScreen() {
         ]}
       >
         <TextInput
-          style={[styles.input, { color: theme.text }]}
-          placeholder="New subject name"
+          style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+          placeholder="Enter new subject name..."
           placeholderTextColor={theme.textSecondary}
           value={subjectName}
           onChangeText={setSubjectName}
@@ -207,7 +265,7 @@ export default function SubjectsScreen() {
           {creating ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.addButtonText}>Add</Text>
+            <Text style={styles.addButtonText}>+ Add Subject</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -220,15 +278,14 @@ export default function SubjectsScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={subjects}
-          keyExtractor={(item) => item._id}
-          renderItem={renderSubject}
-          showsVerticalScrollIndicator={false}
+        <ScrollView 
+          style={styles.subjectList}
           contentContainerStyle={
             subjects.length === 0 ? styles.emptyList : styles.list
           }
-          ListEmptyComponent={
+          showsVerticalScrollIndicator={false}
+        >
+          {subjects.length === 0 ? (
             <View style={styles.emptyContainer}>
               <View
                 style={[
@@ -245,10 +302,16 @@ export default function SubjectsScreen() {
                 Add your first subject above.
               </Text>
             </View>
-          }
-        />
+          ) : (
+            subjects.map((subject) => (
+              <View key={subject._id}>
+                {renderSubject(subject)}
+              </View>
+            ))
+          )}
+        </ScrollView>
       )}
-    </View>
+    </AppLayout>
   );
 }
 
@@ -260,77 +323,99 @@ const styles = StyleSheet.create({
   createContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
+    marginBottom: 24,
+    gap: 12,
   },
   input: {
     flex: 1,
-    height: 44,
-    fontSize: 16,
+    height: 48,
+    fontSize: 15,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
   },
   addButton: {
-    minWidth: 68,
-    height: 40,
+    height: 48,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    minWidth: 120,
   },
   disabledButton: {
     opacity: 0.6,
   },
   addButtonText: {
     color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "600",
   },
   list: {
     paddingBottom: 24,
+    flexGrow: 1,
+  },
+  subjectList: {
+    flex: 1,
   },
   subjectCard: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 16,
-    paddingRight: 12,
+    paddingRight: 16,
+    paddingLeft: 16,
     marginBottom: 12,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
+    minHeight: 72,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  accentMark: {
-    width: 4,
-    alignSelf: "stretch",
+  subjectIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#F0F0F0",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 14,
+  },
+  subjectIcon: {
+    fontSize: 22,
   },
   subjectInfo: {
     flex: 1,
+    marginRight: 10,
   },
   subjectName: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
+    lineHeight: 22,
+    marginBottom: 4,
   },
-  countPill: {
-    alignSelf: "flex-start",
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+  subjectMeta: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   topicCount: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
   },
-  deleteButton: {
-    paddingHorizontal: 10,
+  metaSeparator: {
+    marginHorizontal: 6,
+    fontSize: 13,
+  },
+  updatedTime: {
+    fontSize: 13,
+  },
+  moreButton: {
+    paddingHorizontal: 8,
     paddingVertical: 8,
   },
-  deleteText: {
-    fontSize: 13,
-    fontWeight: "600",
+  moreIcon: {
+    fontSize: 20,
+    fontWeight: "300",
   },
   loadingContainer: {
     flex: 1,
