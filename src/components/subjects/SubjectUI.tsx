@@ -207,10 +207,10 @@ export function FormModal({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
         style={[
           s.overlay,
-          { justifyContent: width < 768 ? "flex-end" : "center" },
+          { justifyContent: width < 768 ? "flex-end" : "center", paddingTop: insets.top },
         ]}
       >
         <View
@@ -223,6 +223,7 @@ export function FormModal({
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingBottom: Math.max(24, insets.bottom),
+              flexShrink: 1,
             },
           ]}
         >

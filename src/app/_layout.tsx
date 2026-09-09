@@ -22,7 +22,7 @@ import { useTheme } from "@/hooks/use-theme";
 
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
-const SPLASH_BACKGROUND = "#FBFAF4";
+import { useThemePreferenceReady } from "@/state/theme-preference";
 const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings"];
 
 // Hold the single native splash before React mounts. Never replace it with a JS logo.
@@ -41,6 +41,7 @@ if (Platform.OS !== "web") {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const themeReady = useThemePreferenceReady();
 
   const theme = useTheme();
 
@@ -60,6 +61,13 @@ export default function RootLayout() {
 
     document.title = "Vault";
   }, []);
+
+  useEffect(() => {
+    if (!themeReady || typeof document === "undefined") return;
+    document.documentElement.style.backgroundColor = theme.background;
+    document.documentElement.style.colorScheme = colorScheme === "dark" ? "dark" : "light";
+    document.body.style.backgroundColor = theme.background;
+  }, [themeReady, colorScheme, theme.background]);
 
   /*
    * =========================================================
@@ -141,7 +149,7 @@ export default function RootLayout() {
   }, [isReady, navigationState?.key, redirectTarget, router]);
 
   useEffect(() => {
-    if (startupComplete || !isReady || !rootLaidOut || !navigationState?.key || redirectTarget) return;
+    if (startupComplete || !themeReady || !isReady || !rootLaidOut || !navigationState?.key || redirectTarget) return;
     // Give the resolved route a layout/paint turn under the native splash. There is
     // no timer, blank-screen phase, minimum brand delay, or second splash component.
     let cancelled = false;
@@ -159,7 +167,7 @@ export default function RootLayout() {
       cancelAnimationFrame(firstFrame);
       cancelAnimationFrame(secondFrame);
     };
-  }, [startupComplete, isReady, rootLaidOut, navigationState?.key, redirectTarget, segments]);
+  }, [startupComplete, themeReady, isReady, rootLaidOut, navigationState?.key, redirectTarget, segments]);
 
   /*
    * =========================================================
@@ -211,11 +219,15 @@ export default function RootLayout() {
    * =========================================================
    */
 
+  // Keep server HTML and the first hydration render empty until storage is read.
+  // On native, the existing launch screen stays visible during this step.
+  if (!themeReady) return null;
+
   return (
     <ThemeProvider value={navigationTheme}>
       <VaultProvider>
-        <StatusBar style={startupComplete && colorScheme === "dark" ? "light" : "dark"} />
-        <View style={{ flex: 1, backgroundColor: SPLASH_BACKGROUND }} onLayout={() => setRootLaidOut(true)}>
+        <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+        <View style={{ flex: 1, backgroundColor: theme.background }} onLayout={() => setRootLaidOut(true)}>
         <Stack
           screenOptions={{
             // Do not animate the initial redirect behind the launch screen.
@@ -255,6 +267,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="subjects/index"
             options={{
+              animation: "none",
               headerShown: false,
               title: "Subjects",
             }}
@@ -313,6 +326,8 @@ export default function RootLayout() {
             name="search"
             options={{ headerShown: false, title: "Search" }}
           />
+
+          <Stack.Screen name="settings" options={{ headerShown: false, title: "Settings" }} />
 
           <Stack.Screen
             name="trash"

@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
 import type { SortOption } from "@/features/passcodes/types";
 import { styles } from "@/features/passcodes/styles";
@@ -30,13 +30,14 @@ export function PasscodesHeader(props: any) {
     goToNextPage,
   } = props;
 
+  const mobile = useWindowDimensions().width < 768;
   return (
     <>
           {/* PAGE HEADER */}
 
           <View
             style={
-              styles.pageHeader
+              [styles.pageHeader, mobile && { display: "none" }]
             }
           >
             <View

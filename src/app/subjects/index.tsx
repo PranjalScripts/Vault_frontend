@@ -1,5 +1,7 @@
+import { ShareSubjectModal, ShareSelection } from "@/components/subjects/ShareSubjectModal";
+import { shadow } from "@/styles/shadow";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import Feather from "@expo/vector-icons/Feather";
 import { AppLayout } from "@/components/AppLayout";
@@ -40,7 +42,7 @@ export default function SubjectsScreen() {
   const t = useTheme();
   const dark = useColorScheme() === "dark";
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const mobile = width < 768;
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [stats, setStats] = useState(emptyStats);
@@ -50,6 +52,24 @@ export default function SubjectsScreen() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("recent");
   const [sortOpen, setSortOpen] = useState(false);
+  const sortButtonRef = useRef<View>(null);
+  const [sortAnchor, setSortAnchor] = useState({ x: 0, y: 0, width: 240, height: 0 });
+  const openSort = () => {
+    if (Platform.OS === "web") {
+      sortButtonRef.current?.measureInWindow((x, y, width, height) => {
+        setSortAnchor({ x, y, width, height });
+        setSortOpen(true);
+      });
+    } else setSortOpen(true);
+  };
+  useEffect(() => {
+    if (Platform.OS !== "web" || !sortOpen) return;
+    const dismiss = () => setSortOpen(false);
+    window.addEventListener("resize", dismiss);
+    return () => window.removeEventListener("resize", dismiss);
+  }, [sortOpen]);
+  const sortMenuWidth = Math.min(Math.max(sortAnchor.width, 220), width - 16);
+
   const [layout, setLayout] = useState<"grid" | "list">("grid");
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
@@ -57,11 +77,13 @@ export default function SubjectsScreen() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<Subject | null>(null);
+  const [sharing, setSharing] = useState<ShareSelection | null>(null);
   const [menu, setMenu] = useState<Subject | null>(null);
   const [deleting, setDeleting] = useState<Subject | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
   const request = useRef(0);
+  const loadedQuery = useRef("");
   useEffect(() => {
     const timer = setTimeout(() => {
       setQuery(search.trim());
@@ -71,7 +93,8 @@ export default function SubjectsScreen() {
   }, [search]);
   const fetchSubjects = useCallback(async () => {
     const sequence = ++request.current;
-    setLoading(true);
+    const queryKey = JSON.stringify({ page, query, sort });
+    setLoading(loadedQuery.current !== queryKey);
     setError("");
     try {
       const response = await getSubjects({
@@ -85,6 +108,7 @@ export default function SubjectsScreen() {
         setPage(Math.max(1, response.data.pagination.totalPages));
         return;
       }
+      loadedQuery.current = queryKey;
       setSubjects(response.data.data);
       setStats(response.data.stats);
       setPages(response.data.pagination.totalPages);
@@ -227,7 +251,7 @@ export default function SubjectsScreen() {
   return (
     <AppLayout
       mobileTitle="Subjects"
-      contentBackgroundColor={dark ? t.background : "#FFFFFF"}
+      contentBackgroundColor={mobile || dark ? t.background : "#FFFFFF"}
       mobileHeaderActions={
         <Pressable
           accessibilityRole="button"
@@ -282,17 +306,34 @@ export default function SubjectsScreen() {
           <View
             style={{
               flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 12,
+              flexWrap: "nowrap",
+              gap: mobile ? 8 : 12,
               justifyContent: "space-between",
               alignItems: "center",
             }}
           >
-            <Button
-              secondary
-              label={`↕  Sort: ${sorts.find((item) => item.value === sort)?.label}  ⌄`}
-              onPress={() => setSortOpen(true)}
-            />
+            <View ref={sortButtonRef} collapsable={false} style={mobile ? { flex: 1, minWidth: 0 } : undefined}>
+              {mobile ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sort subjects: ${sorts.find((item) => item.value === sort)?.label}`}
+                  onPress={openSort}
+                  style={({ pressed }) => ({ minHeight: 46, borderWidth: 1, borderColor: t.border, backgroundColor: t.backgroundElement, borderRadius: 9, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 6, opacity: pressed ? 0.75 : 1 })}
+                >
+                  <Feather name="sliders" size={16} color={t.textSecondary} />
+                  <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: "600", color: t.text }}>
+                    Sort: {sorts.find((item) => item.value === sort)?.label}
+                  </Text>
+                  <Feather name="chevron-down" size={16} color={t.textSecondary} />
+                </Pressable>
+              ) : (
+                <Button
+                  secondary
+                  label={`↕  Sort: ${sorts.find((item) => item.value === sort)?.label}  ⌄`}
+                  onPress={openSort}
+                />
+              )}
+            </View>
             <View
               style={{
                 flexDirection: "row",
@@ -300,6 +341,7 @@ export default function SubjectsScreen() {
                 borderColor: t.border,
                 borderRadius: 9,
                 padding: 2,
+                flexShrink: 0,
               }}
             >
               {(["grid", "list"] as const).map((value) => (
@@ -334,11 +376,13 @@ export default function SubjectsScreen() {
         </View>
         {!mobile && statsView}
         {loading ? (
-          <Empty
-            loading
-            title="Loading your library"
-            description="Gathering your subjects and resources…"
-          />
+          mobile ? (
+            <View accessibilityLabel="Loading subjects" style={{ paddingVertical: 48, alignItems: "center" }}>
+              <ActivityIndicator color={t.accent} />
+            </View>
+          ) : (
+            <Empty loading title="Loading your library" description="Gathering your subjects and resources…" />
+          )
         ) : error ? (
           <Empty
             title="Couldn’t load subjects"
@@ -420,6 +464,46 @@ export default function SubjectsScreen() {
           </View>
         )}
       </View>
+      {Platform.OS === "web" ? (
+        <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
+          <View style={{ flex: 1 }}>
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSortOpen(false)} accessibilityLabel="Close sort menu" />
+            <View style={{
+              position: "absolute",
+              width: sortMenuWidth,
+              left: Math.max(8, Math.min(sortAnchor.x, width - sortMenuWidth - 8)),
+              top: sortAnchor.y + sortAnchor.height + 176 <= height - 8
+                ? sortAnchor.y + sortAnchor.height + 6
+                : Math.max(8, sortAnchor.y - 176),
+              padding: 7,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: t.border,
+              backgroundColor: t.backgroundElement,
+              ...shadow({ opacity: 0.18, radius: 18, x: 0, y: 8 }),
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 10, minHeight: 42 }}>
+                <Text style={{ color: t.text, fontSize: 15, fontWeight: "800" }}>Sort subjects</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Close sort menu" onPress={() => setSortOpen(false)}>
+                  <Text style={{ color: t.textSecondary, fontSize: 24, paddingHorizontal: 6 }}>×</Text>
+                </Pressable>
+              </View>
+              {sorts.map((item) => (
+                <Pressable
+                  key={item.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sort === item.value }}
+                  onPress={() => { setSort(item.value); setPage(1); setSortOpen(false); }}
+                  style={({ pressed }) => ({ minHeight: 38, paddingHorizontal: 10, borderRadius: 7, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: sort === item.value ? t.accentMuted : pressed ? t.backgroundSelected : "transparent" })}
+                >
+                  <Text style={{ color: sort === item.value ? t.accent : t.text, fontSize: 12, fontWeight: sort === item.value ? "700" : "500" }}>{item.label}</Text>
+                  {sort === item.value && <Text style={{ color: t.accent }}>✓</Text>}
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </Modal>
+      ) : (
       <FormModal
         visible={sortOpen}
         title="Sort subjects"
@@ -439,12 +523,17 @@ export default function SubjectsScreen() {
           />
         ))}
       </FormModal>
+      )}
+      <ShareSubjectModal selection={sharing} onClose={() => setSharing(null)} />
       <FormModal
         visible={!!menu}
         title={menu?.subjectName || "Subject"}
         subtitle="Manage this learning collection."
         onClose={() => setMenu(null)}
       >
+        <Button secondary label="Share entire subject" onPress={() => {
+          if (menu) { setSharing({ subject: menu }); setMenu(null); }
+        }} />
         <Button
           secondary
           label="Rename subject"

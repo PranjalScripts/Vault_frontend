@@ -5,7 +5,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
+import Feather from "@expo/vector-icons/Feather";
 import Toast from "react-native-toast-message";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -847,7 +848,23 @@ export default function PasscodesScreen() {
   // =====================================================
 
   return (
-    <AppLayout>
+    <AppLayout
+      mobileTitle="Passcodes"
+      mobileHeaderActions={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Save passcode"
+          disabled={isVaultLoading}
+          onPress={() => {
+            if (!isVaultCreated || !isVaultUnlocked || !vaultKey) openVaultModal();
+            else setShowForm(true);
+          }}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: isVaultLoading ? 0.5 : 1 }}
+        >
+          <Feather name="plus" size={27} color={theme.accent} />
+        </Pressable>
+      }
+    >
       <View
         style={{
           padding: 10,

@@ -3,9 +3,7 @@ import {
   Alert,
   StyleSheet,
   Text,
-  Pressable,
   View,
-  useColorScheme,
   useWindowDimensions,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -27,6 +25,7 @@ import { isEncryptedField } from "@/features/passcodes/utils/passcodeCrypto";
 import { decryptWithVaultKey } from "@/crypto/vaultCrypto";
 import { useVault } from "@/contexts/vaultContext";
 import { useTheme } from "@/hooks/use-theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type DashboardData = {
   todos: Todo[];
@@ -189,7 +188,6 @@ export default function DashboardScreen() {
         icon: "✓",
         accent: "#7047EB",
         lightTint: "#F6F2FF",
-        darkTint: "#251F35",
       },
       {
         title: "Subjects",
@@ -198,7 +196,6 @@ export default function DashboardScreen() {
         icon: "▤",
         accent: "#1FA357",
         lightTint: "#F1F8F2",
-        darkTint: "#182B20",
       },
       {
         title: "Passcodes",
@@ -207,7 +204,6 @@ export default function DashboardScreen() {
         icon: "▣",
         accent: "#2878F0",
         lightTint: "#F0F6FF",
-        darkTint: "#19283C",
       },
       {
         title: "Today's Streak",
@@ -216,7 +212,6 @@ export default function DashboardScreen() {
         icon: "🔥",
         accent: "#F29B18",
         lightTint: "#FFF8E9",
-        darkTint: "#332716",
       },
     ],
     [data, isVaultUnlocked],
@@ -301,25 +296,6 @@ export default function DashboardScreen() {
   return (
     <AppLayout>
       <View style={styles.page}>
-        <View style={styles.greetingRow}>
-          <View style={styles.greeting}>
-            <Text
-              style={[
-                styles.greetingTitle,
-                isMobile && styles.mobileGreeting,
-                { color: theme.text },
-              ]}
-            >
-              Hello, Pranjal 👋
-            </Text>
-            <Text
-              style={[styles.greetingSubtitle, { color: theme.textSecondary }]}
-            >
-              Stay organized. Stay secure.
-            </Text>
-          </View>
-         
-        </View>
         <View style={styles.statsGrid}>
           {statCards.map((card) => (
             <View
@@ -332,7 +308,10 @@ export default function DashboardScreen() {
             >
               <DashboardStatCard
                 {...card}
-                tint={colorScheme === "dark" ? card.darkTint : card.lightTint}
+                tint={colorScheme === "dark" ? theme.backgroundElement : card.lightTint}
+                borderColor={colorScheme === "dark" ? theme.border : `${card.accent}24`}
+                iconBackground={colorScheme === "dark" ? theme.backgroundSelected : `${card.accent}16`}
+                accent={colorScheme === "dark" ? theme.accent : card.accent}
                 compact={isMobile}
                 textColor={theme.text}
                 mutedColor={theme.textSecondary}

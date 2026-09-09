@@ -1,0 +1,46 @@
+diff --git a/node_modules/expo/src/launch/withDevTools.tsx b/node_modules/expo/src/launch/withDevTools.tsx
+index 5a98062..289218f 100644
+--- a/node_modules/expo/src/launch/withDevTools.tsx
++++ b/node_modules/expo/src/launch/withDevTools.tsx
+@@ -1,4 +1,5 @@
+ import * as React from 'react';
++import { AppState } from 'react-native';
+ 
+ // Keep the screen awake on Android, we don't use the Fast Refresh overlay here.
+ // The default behavior here is to skip the custom Fast Refresh indicator.
+@@ -10,8 +11,33 @@ export function withDevTools<TComponent extends React.ComponentType<any>>(
+   const useOptionalKeepAwake: (tag?: string) => void = (() => {
+     try {
+       // Optionally import expo-keep-awake
+-      const { useKeepAwake, ExpoKeepAwakeTag } = require('expo-keep-awake');
+-      return () => useKeepAwake(ExpoKeepAwakeTag, { suppressDeactivateWarnings: true });
++      const { activateKeepAwakeAsync, deactivateKeepAwake, ExpoKeepAwakeTag } = require('expo-keep-awake');
++      return function useDevKeepAwake() {
++        React.useEffect(() => {
++          let mounted = true;
++          const deactivate = () => deactivateKeepAwake(ExpoKeepAwakeTag).catch(() => {});
++          const activate = async () => {
++            if (AppState.currentState !== 'active') return;
++            try {
++              await activateKeepAwakeAsync(ExpoKeepAwakeTag);
++              if (!mounted) await deactivate();
++            } catch (error) {
++              // Android may not have a current Activity during reload/sign-in.
++              // Keep-awake is optional; retry when the app becomes active.
++              if (mounted) console.warn('Development keep-awake unavailable:', error);
++            }
++          };
++          void activate();
++          const subscription = AppState.addEventListener('change', (state) => {
++            if (state === 'active') void activate();
++          });
++          return () => {
++            mounted = false;
++            subscription.remove();
++            void deactivate();
++          };
++        }, []);
++      };
+     } catch {}
+     return () => {};
+   })();

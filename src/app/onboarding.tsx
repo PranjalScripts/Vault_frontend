@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 import { googleLogin, saveAuthToken } from "@/api/api";
@@ -21,6 +21,8 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
+  const returnToShare = typeof shareToken === "string" && /^[a-f0-9]{64}$/.test(shareToken) ? shareToken : null;
   const theme = useTheme();
 
   const [isLoading, setIsLoading] = React.useState(false);
@@ -53,6 +55,7 @@ export default function OnboardingScreen() {
       const result = await googleLogin(idToken);
 
       const token = result.data?.data?.token || result.data?.token;
+      const user = result.data?.data?.user || result.data?.user;
 
       if (!token) {
         Alert.alert(
@@ -62,9 +65,10 @@ export default function OnboardingScreen() {
         return;
       }
 
-      await saveAuthToken(token);
+      await saveAuthToken(token, user);
 
-      router.replace("/dashboard");
+      if (returnToShare) router.replace({ pathname: "/share", params: { token: returnToShare, add: "1" } });
+      else router.replace("/dashboard");
     } catch (error: any) {
       Alert.alert(
         "Backend Error",
@@ -75,7 +79,7 @@ export default function OnboardingScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, returnToShare]);
 
   /*
    * -------------------------------------------------------

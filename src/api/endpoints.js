@@ -131,3 +131,9 @@ export const restoreTrash = (kind, id, subjectId) =>
   API.post(`/trash/${kind}/${id}/restore`, { subjectId });
 
 export const universalSearch = (params, signal) => API.get("/search", { params, signal });
+
+export const createSubjectShare = (id, topicId) => API.post(`/subjects/${id}/share`, { topicId });
+
+export const deleteTrashItem = (kind, id, subjectId) => API.delete(`/trash/${kind}/${id}`, { data: { subjectId } });
+export const emptyTrash = () => API.delete("/trash");
+export const importSharedSubject = (token) => API.post(`/subjects/shared/${token}/import`);

@@ -53,7 +53,7 @@ export function DeleteModal({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={() => {
         if (!deletingMultiple) {
           onClose();

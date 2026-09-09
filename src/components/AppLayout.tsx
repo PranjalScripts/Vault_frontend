@@ -10,10 +10,14 @@ import {
   useWindowDimensions,
   ScrollView,
   TextInput,
+  Animated,
+  Easing,
+  Image,
 } from "react-native";
 import { useRouter, usePathname, useFocusEffect } from "expo-router";
 import { useTheme } from "@/hooks/use-theme";
-import { logout, universalSearch } from "@/api/api";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { logout, universalSearch, getAuthUser } from "@/api/api";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -25,6 +29,7 @@ export function AppLayout({
   subtitle,
   mobileTitle,
   mobileHeaderActions,
+  showMobileSearch = true,
   scrollable = true,
   contentBackgroundColor,
   mobileBackAction,
@@ -35,6 +40,7 @@ export function AppLayout({
   subtitle?: string;
   mobileTitle?: string;
   mobileHeaderActions?: React.ReactNode;
+  showMobileSearch?: boolean;
   scrollable?: boolean;
   contentBackgroundColor?: string;
   mobileBackAction?: () => void;
@@ -42,6 +48,7 @@ export function AppLayout({
 }) {
   const { width } = useWindowDimensions();
   const theme = useTheme();
+  const dark = useColorScheme() === "dark";
   const router = useRouter();
   const pathname = usePathname();
   useFocusEffect(
@@ -65,21 +72,29 @@ export function AppLayout({
       return () => window.removeEventListener("keydown", shortcut);
     }, [pathname, router]),
   );
-  const subjectNavigation = pathname.startsWith("/subjects");
   const navigationIcon = (
     path: string,
-  ): "home" | "check-square" | "book-open" | "lock" | "trash-2" | "search" =>
-    path === "/search"
-      ? "search"
-      : path === "/trash"
-        ? "trash-2"
-        : path === "/dashboard"
-          ? "home"
-          : path === "/todos"
-            ? "check-square"
-            : path === "/subjects"
-              ? "book-open"
-              : "lock";
+  ):
+    | "home"
+    | "check-square"
+    | "book-open"
+    | "lock"
+    | "trash-2"
+    | "search"
+    | "settings" =>
+    path === "/settings"
+      ? "settings"
+      : path === "/search"
+        ? "search"
+        : path === "/trash"
+          ? "trash-2"
+          : path === "/dashboard"
+            ? "home"
+            : path === "/todos"
+              ? "check-square"
+              : path === "/subjects"
+                ? "book-open"
+                : "lock";
   const insets = useSafeAreaInsets();
 
   const [mobileMenuVisible, setMobileMenuVisible] = React.useState(false);
@@ -87,6 +102,58 @@ export function AppLayout({
   const [searchQuery, setSearchQuery] = React.useState("");
   const [searchResults, setSearchResults] = React.useState<any[]>([]);
   const [searchLoading, setSearchLoading] = React.useState(false);
+  const [user, setUser] = React.useState<any>(null);
+
+  // Animation for drawer slide-in from left
+  const slideAnim = React.useRef(new Animated.Value(-Math.min(width * 0.84, 340))).current;
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    // Fetch user data on mount
+    const fetchUserData = async () => {
+      try {
+        const userData = await getAuthUser();
+        setUser(userData);
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+    fetchUserData();
+  }, []);
+
+  React.useEffect(() => {
+    if (mobileMenuVisible) {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: -Math.min(width * 0.84, 340),
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [mobileMenuVisible, slideAnim, fadeAnim, width]);
 
   React.useEffect(() => {
     const term = searchQuery.trim();
@@ -270,11 +337,7 @@ export function AppLayout({
     },
 
     { name: "Recently Deleted", path: "/trash", icon: "🗑️" },
-    // {
-    //   name: "Settings",
-    //   path: "/settings",
-    //   icon: "⚙️",
-    // },
+    { name: "Settings", path: "/settings", icon: "⚙️" },
   ];
 
   const bottomNavItems = [
@@ -312,6 +375,10 @@ export function AppLayout({
     setMobileMenuVisible(false);
 
     if (path === "#") {
+      return;
+    }
+
+    if (pathname === path || pathname.startsWith(`${path}/`)) {
       return;
     }
 
@@ -385,9 +452,11 @@ export function AppLayout({
             <View
               style={[styles.brandMark, { backgroundColor: theme.accentMuted }]}
             >
-              <Text style={[styles.brandMarkText, { color: theme.accent }]}>
-                V
-              </Text>
+              <Image
+                source={require("@/assets/images/adaptive-icon.png")}
+                style={styles.brandLogo}
+                resizeMode="contain"
+              />
             </View>
             <View>
               <Text style={[styles.brandText, { color: theme.text }]}>
@@ -436,17 +505,11 @@ export function AppLayout({
                       isActive && { backgroundColor: theme.backgroundElement },
                     ]}
                   >
-                    <>
-                      {subjectNavigation ? (
-                        <Feather
-                          name={navigationIcon(item.path)}
-                          size={20}
-                          color={isActive ? theme.accent : theme.textSecondary}
-                        />
-                      ) : (
-                        <Text style={styles.navIcon}>{item.icon}</Text>
-                      )}
-                    </>
+                    <Feather
+                      name={navigationIcon(item.path)}
+                      size={20}
+                      color={isActive ? theme.accent : theme.textSecondary}
+                    />
                   </View>
 
                   <Text
@@ -586,9 +649,18 @@ export function AppLayout({
               </TouchableOpacity>
 
               <View style={styles.profileBadge}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>P</Text>
-                </View>
+                {user?.picture ? (
+                  <Image
+                    source={{ uri: user.picture }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                    </Text>
+                  </View>
+                )}
 
                 <Text
                   style={[
@@ -598,7 +670,7 @@ export function AppLayout({
                     },
                   ]}
                 >
-                  Pranjal
+                  {user?.name || "User"}
                 </Text>
               </View>
             </View>
@@ -783,14 +855,16 @@ export function AppLayout({
           {/* Page actions / notification */}
 
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Search everything"
-              style={styles.headerButton}
-              onPress={handleSearchPress}
-            >
-              <Feather name="search" size={21} color={theme.text} />
-            </TouchableOpacity>
+            {showMobileSearch && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Search everything"
+                style={styles.headerButton}
+                onPress={handleSearchPress}
+              >
+                <Feather name="search" size={21} color={theme.text} />
+              </TouchableOpacity>
+            )}
             {mobileHeaderActions || (
               <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
                 <Text style={[styles.headerIcon, { color: theme.text }]}>
@@ -809,19 +883,19 @@ export function AppLayout({
       <Modal
         visible={mobileMenuVisible}
         transparent={true}
-        animationType="slide"
+        animationType="none"
         onRequestClose={() => setMobileMenuVisible(false)}
       >
         <View style={styles.menuRoot}>
           {/* Drawer */}
 
-          <View
+          <Animated.View
             style={[
               styles.drawer,
               {
                 width: Math.min(width * 0.84, 340),
-
                 backgroundColor: theme.backgroundElement,
+                transform: [{ translateX: slideAnim }],
               },
             ]}
           >
@@ -839,29 +913,31 @@ export function AppLayout({
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.drawerAvatar,
-                    {
-                      backgroundColor: theme.accent,
-                    },
-                  ]}
-                >
-                  <Text style={styles.drawerAvatarText}>P</Text>
-                </View>
-
-                <View style={styles.profileDetails}>
-                  <Text
+                {user?.picture ? (
+                  <Image
+                    source={{ uri: user.picture }}
                     style={[
-                      styles.welcomeText,
+                      styles.drawerAvatar,
                       {
-                        color: theme.text,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.drawerAvatar,
+                      {
+                        backgroundColor: theme.accent,
                       },
                     ]}
                   >
-                    Welcome back 👋
-                  </Text>
+                    <Text style={styles.drawerAvatarText}>{user?.name?.charAt(0)?.toUpperCase() || "U"}</Text>
+                  </View>
+                )}
 
+                <View style={styles.profileDetails}>
+            
                   <Text
                     style={[
                       styles.drawerUserName,
@@ -870,18 +946,7 @@ export function AppLayout({
                       },
                     ]}
                   >
-                    Pranjal
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.signedInText,
-                      {
-                        color: theme.textSecondary,
-                      },
-                    ]}
-                  >
-                    You are signed in to Vault
+                    {user?.name || "User"}
                   </Text>
                 </View>
 
@@ -950,68 +1015,80 @@ export function AppLayout({
 
               {/* Logout */}
 
-              <View
-                style={[
-                  styles.drawerBottom,
-                  {
-                    borderTopColor: theme.border,
-                  },
-                ]}
-              >
-                <TouchableOpacity
+              {pathname !== "/settings" && (
+                <View
                   style={[
-                    styles.drawerLogout,
+                    styles.drawerBottom,
                     {
-                      backgroundColor: `${theme.danger}0C`,
-                      borderColor: `${theme.danger}22`,
+                      borderTopColor: theme.border,
                     },
                   ]}
-                  onPress={handleLogout}
-                  activeOpacity={0.7}
                 >
-                  <View
+                  <TouchableOpacity
                     style={[
-                      styles.drawerLogoutIconWrap,
-                      { backgroundColor: `${theme.danger}14` },
+                      styles.drawerLogout,
+                      {
+                        backgroundColor: `${theme.danger}0C`,
+                        borderColor: `${theme.danger}22`,
+                      },
                     ]}
+                    onPress={handleLogout}
+                    activeOpacity={0.7}
                   >
-                    <Text
-                      style={[styles.drawerLogoutIcon, { color: theme.danger }]}
-                    >
-                      ↪
-                    </Text>
-                  </View>
-                  <View style={styles.logoutCopy}>
-                    <Text
-                      style={[styles.drawerLogoutText, { color: theme.danger }]}
-                    >
-                      Log out
-                    </Text>
-                    <Text
+                    <View
                       style={[
-                        styles.logoutHint,
-                        { color: theme.textSecondary },
+                        styles.drawerLogoutIconWrap,
+                        { backgroundColor: `${theme.danger}14` },
                       ]}
                     >
-                      End this session
+                      <Text
+                        style={[
+                          styles.drawerLogoutIcon,
+                          { color: theme.danger },
+                        ]}
+                      >
+                        ↪
+                      </Text>
+                    </View>
+                    <View style={styles.logoutCopy}>
+                      <Text
+                        style={[
+                          styles.drawerLogoutText,
+                          { color: theme.danger },
+                        ]}
+                      >
+                        Log out
+                      </Text>
+                      <Text
+                        style={[
+                          styles.logoutHint,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        End this session
+                      </Text>
+                    </View>
+                    <Text
+                      style={[styles.logoutChevron, { color: theme.danger }]}
+                    >
+                      ›
                     </Text>
-                  </View>
-                  <Text style={[styles.logoutChevron, { color: theme.danger }]}>
-                    ›
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  </TouchableOpacity>
+                </View>
+              )}
             </SafeAreaView>
-          </View>
+          </Animated.View>
 
           {/* Backdrop */}
 
-          <TouchableOpacity
-            style={styles.menuBackdrop}
-            activeOpacity={1}
-            onPress={() => setMobileMenuVisible(false)}
-            accessibilityLabel="Close menu"
-          />
+          <Animated.View style={[styles.menuBackdrop, { opacity: fadeAnim }]}>
+            <TouchableOpacity
+              style={styles.menuBackdropTouchable}
+              activeOpacity={1}
+              onPress={() => setMobileMenuVisible(false)}
+              accessibilityLabel="Close menu"
+            />
+          </Animated.View>
         </View>
       </Modal>
 
@@ -1132,7 +1209,7 @@ export function AppLayout({
         style={[
           styles.bottomNav,
           {
-            backgroundColor: contentBackgroundColor || theme.background,
+            backgroundColor: dark ? theme.background : theme.backgroundElement,
 
             borderTopColor: theme.border,
           },
@@ -1149,25 +1226,12 @@ export function AppLayout({
               onPress={() => handleNav(item.path)}
               activeOpacity={0.7}
             >
-              {subjectNavigation ? (
-                <Feather
-                  name={navigationIcon(item.path)}
-                  size={23}
-                  color={isActive ? theme.accent : theme.textSecondary}
-                  style={{ marginBottom: 4 }}
-                />
-              ) : (
-                <Text
-                  style={[
-                    styles.bottomNavIcon,
-                    {
-                      color: isActive ? theme.accent : theme.textSecondary,
-                    },
-                  ]}
-                >
-                  {item.icon}
-                </Text>
-              )}
+              <Feather
+                name={navigationIcon(item.path)}
+                size={23}
+                color={isActive ? theme.accent : theme.textSecondary}
+                style={{ marginBottom: 4 }}
+              />
 
               <Text
                 style={[
@@ -1393,6 +1457,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+
   avatarText: {
     color: "#FFFFFF",
     fontWeight: "600",
@@ -1580,6 +1650,10 @@ const styles = StyleSheet.create({
   menuBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
+  },
+
+  menuBackdropTouchable: {
+    flex: 1,
   },
 
   /*
@@ -1779,7 +1853,11 @@ const styles = StyleSheet.create({
   iconBtn: {
     padding: 8,
   },
-
+  brandLogo: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+  },
   iconText: {
     fontSize: 20,
   },

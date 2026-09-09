@@ -1,3 +1,4 @@
+import { ShareSubjectModal, ShareSelection } from "@/components/subjects/ShareSubjectModal";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Linking,
@@ -61,6 +62,7 @@ export default function SubjectDetailScreen() {
   const [grid, setGrid] = useState(false);
   const [page, setPage] = useState(1);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [sharing, setSharing] = useState<ShareSelection | null>(null);
   const [topicMenu, setTopicMenu] = useState<Topic | null>(null);
   const [resourceTopic, setResourceTopic] = useState<Topic | null>(null);
   const [subjectMenu, setSubjectMenu] = useState(false);
@@ -846,6 +848,7 @@ export default function SubjectDetailScreen() {
           />
         )}
       </FormModal>
+      <ShareSubjectModal selection={sharing} onClose={() => setSharing(null)} />
       <FormModal
         visible={!!topicMenu}
         title={topicMenu?.topic || "Topic actions"}
@@ -863,6 +866,9 @@ export default function SubjectDetailScreen() {
             }}
           />
         ))}
+        <Button secondary label="Share topic" disabled={busy} onPress={() => {
+          if (subject && topicMenu) { setSharing({ subject, topic: topicMenu }); setTopicMenu(null); }
+        }} />
         <Button
           secondary
           label="Edit topic"
@@ -932,6 +938,9 @@ export default function SubjectDetailScreen() {
         subtitle={subject?.subjectName || ""}
         onClose={() => setSubjectMenu(false)}
       >
+        <Button secondary label="Share entire subject" onPress={() => {
+          if (subject) { setSharing({ subject }); setSubjectMenu(false); }
+        }} />
         <Button secondary label="Edit Subject" onPress={openSubjectForm} />
         <Button
           secondary

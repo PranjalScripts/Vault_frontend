@@ -1,3 +1,4 @@
+import { useThemePreference } from '@/state/theme-preference';
 import { useEffect, useState } from 'react';
 import { useColorScheme as useRNColorScheme } from 'react-native';
 
@@ -12,9 +13,10 @@ export function useColorScheme() {
   }, []);
 
   const colorScheme = useRNColorScheme();
+  const preference = useThemePreference();
 
   if (hasHydrated) {
-    return colorScheme;
+    return preference === "system" ? colorScheme : preference;
   }
 
   return 'light';

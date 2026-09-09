@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import API, { clearApiCache } from "./client";
 
 const TOKEN_KEY = "vault-auth-token";
+const USER_KEY = "vault-auth-user";
 let authListeners = [];
 
 export const subscribeToAuthChanges = (listener) => {
@@ -32,7 +33,7 @@ export const setAuthToken = (token) => {
   }
 };
 
-export const saveAuthToken = async (token) => {
+export const saveAuthToken = async (token, user = null) => {
   if (!token) {
     console.warn("saveAuthToken called without a token");
     return;
@@ -43,8 +44,14 @@ export const saveAuthToken = async (token) => {
 
     if (Platform.OS === "web") {
       window.localStorage.setItem(TOKEN_KEY, token);
+      if (user) {
+        window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+      }
     } else {
       await SecureStore.setItemAsync(TOKEN_KEY, token);
+      if (user) {
+        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+      }
     }
 
     notifyAuthChange(true);
@@ -69,6 +76,19 @@ export const getAuthToken = async () => {
   }
 };
 
+export const getAuthUser = async () => {
+  try {
+    const userStr =
+      Platform.OS === "web"
+        ? window.localStorage.getItem(USER_KEY)
+        : await SecureStore.getItemAsync(USER_KEY);
+
+    return userStr ? JSON.parse(userStr) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const logout = async () => {
   try {
     setAuthToken(null);
@@ -76,8 +96,10 @@ export const logout = async () => {
 
     if (Platform.OS === "web") {
       window.localStorage.removeItem(TOKEN_KEY);
+      window.localStorage.removeItem(USER_KEY);
     } else {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
+      await SecureStore.deleteItemAsync(USER_KEY);
     }
 
     notifyAuthChange(false);

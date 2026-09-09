@@ -8,6 +8,8 @@ type Props = {
   icon: string;
   accent: string;
   tint: string;
+  borderColor: string;
+  iconBackground: string;
   compact: boolean;
   textColor: string;
   mutedColor: string;
@@ -20,15 +22,17 @@ export function DashboardStatCard({
   icon,
   accent,
   tint,
+  borderColor,
+  iconBackground,
   compact,
   textColor,
   mutedColor,
 }: Props) {
   return (
-    <View style={[styles.card, compact && styles.compactCard, { backgroundColor: tint, borderColor: `${accent}24` }]}>
+    <View style={[styles.card, compact && styles.compactCard, { backgroundColor: tint, borderColor }]}>
       <View style={styles.headingRow}>
-        <View style={[styles.iconBadge, compact && styles.compactIcon, { backgroundColor: `${accent}16` }]}>
-          <Text style={[styles.icon, compact && styles.compactIconText]}>{icon}</Text>
+        <View style={[styles.iconBadge, compact && styles.compactIcon, { backgroundColor: iconBackground }]}>
+          <Text style={[styles.icon, compact && styles.compactIconText, { color: accent }]}>{icon}</Text>
         </View>
         <Text numberOfLines={1} style={[styles.title, compact && styles.compactTitle, { color: textColor }]}>{title}</Text>
       </View>

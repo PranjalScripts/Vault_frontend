@@ -1,5 +1,7 @@
 import React from "react";
-import { ActivityIndicator, Modal, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Modal, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
+
+import { PasscodeEditorShell } from "./PasscodeEditorShell";
 
 import { styles } from "@/features/passcodes/styles";
 
@@ -20,38 +22,28 @@ export function PasscodeModals(props: any) {
     confirmDelete,
   } = props;
 
+  const mobile = useWindowDimensions().width < 768;
   return (
     <>
-          <Modal
-            visible={
-              !!editingPasscode
-            }
-            transparent
-            animationType="fade"
-            onRequestClose={() =>
-              setEditingPasscode(
-                null
-              )
-            }
+          <PasscodeEditorShell
+            visible={!!editingPasscode}
+            title="Edit Passcode"
+            onClose={() => { if (!updating) setEditingPasscode(null); }}
           >
-            <View
-              style={
-                styles.modalOverlay
-              }
-            >
               {editingPasscode && (
                 <View
                   style={[
                     styles.editModal,
+                    mobile && { width: "100%", maxWidth: "100%", borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
                     {
                       backgroundColor:
-                        theme.backgroundElement,
+                        mobile ? theme.background : theme.backgroundElement,
                     },
                   ]}
                 >
                   <View
                     style={
-                      styles.modalTop
+                      [styles.modalTop, mobile && { display: "none" }]
                     }
                   >
                     <View
@@ -98,6 +90,7 @@ export function PasscodeModals(props: any) {
                   <Text
                     style={[
                       styles.modalTitle,
+                      mobile && { display: "none" },
                       {
                         color:
                           theme.text,
@@ -285,8 +278,7 @@ export function PasscodeModals(props: any) {
                   </View>
                 </View>
               )}
-            </View>
-          </Modal>
+          </PasscodeEditorShell>
 
           {/* =================================================
               DELETE MODAL
@@ -297,7 +289,7 @@ export function PasscodeModals(props: any) {
               !!deleteConfirmId
             }
             transparent
-            animationType="fade"
+            animationType="none"
             onRequestClose={() =>
               setDeleteConfirmId(
                 null

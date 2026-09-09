@@ -37,7 +37,7 @@ export function VaultModal(props: any) {
     <Modal
       visible={showVaultModal}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={closeVaultModal}
     >
       <View style={styles.modalOverlay}>
