@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -48,38 +48,7 @@ export default function OnboardingScreen() {
     });
   }, []);
 
-  /*
-   * -------------------------------------------------------
-   * WEB AUTH RESPONSE
-   * -------------------------------------------------------
-   */
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    if (!response) return;
-
-    if (response.type !== "success") {
-      setIsLoading(false);
-      return;
-    }
-
-    const idToken =
-      response.authentication?.idToken || response.params?.id_token;
-
-    if (!idToken) {
-      Alert.alert("Sign-in failed", "Google did not return an ID token.");
-      setIsLoading(false);
-      return;
-    }
-
-    handleBackendLogin(idToken);
-  }, [response]);
-
-  /*
-   * -------------------------------------------------------
-   * SEND GOOGLE ID TOKEN TO BACKEND
-   * -------------------------------------------------------
-   */
-  const handleBackendLogin = async (idToken: string) => {
+  const handleBackendLogin = useCallback(async (idToken: string) => {
     try {
       const result = await googleLogin(idToken);
 
@@ -106,7 +75,40 @@ export default function OnboardingScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router]);
+
+  /*
+   * -------------------------------------------------------
+   * WEB AUTH RESPONSE
+   * -------------------------------------------------------
+   */
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (!response) return;
+
+    if (response.type !== "success") {
+      setIsLoading(false);
+      return;
+    }
+
+    const idToken =
+      response.authentication?.idToken || response.params?.id_token;
+
+    if (!idToken) {
+      Alert.alert("Sign-in failed", "Google did not return an ID token.");
+      setIsLoading(false);
+      return;
+    }
+
+    handleBackendLogin(idToken);
+  }, [response, handleBackendLogin]);
+
+  /*
+   * -------------------------------------------------------
+   * SEND GOOGLE ID TOKEN TO BACKEND
+   * -------------------------------------------------------
+   */
+
 
   /*
    * -------------------------------------------------------

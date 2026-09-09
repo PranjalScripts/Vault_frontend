@@ -1,3 +1,4 @@
+import { shadow } from "@/styles/shadow";
 import React, { useState, useEffect, useRef } from "react";
 
 import {
@@ -70,7 +71,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
   // OTP State
   const [otp, setOtp] = useState("");
 
-  const [otpSent, setOtpSent] = useState(false);
 
   const [resendCountdown, setResendCountdown] = useState(0);
 
@@ -86,9 +86,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
   // Recovery State
   const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
 
-  const [recoveredMasterKey, setRecoveredMasterKey] = useState<string | null>(
-    null,
-  );
 
   const otpInputRef = useRef<TextInput>(null);
 
@@ -122,7 +119,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
 
       console.log("✅ OTP sent successfully");
 
-      setOtpSent(true);
 
       setResendCountdown(OTP_RESEND_COOLDOWN);
 
@@ -260,7 +256,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
       console.log("✅ Master vault key recovered");
       console.log("RECOVERED FRONTEND KEY LENGTH:", masterKey?.length);
 
-      setRecoveredMasterKey(masterKey);
 
       // -----------------------------------------------
       // GENERATE NEW PASSWORD WRAPPING
@@ -371,7 +366,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
 
     setOtp("");
 
-    setOtpSent(false);
 
     setResendCountdown(0);
 
@@ -385,7 +379,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
 
     setRecoveryToken(null);
 
-    setRecoveredMasterKey(null);
 
     onClose?.();
   };
@@ -808,10 +801,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginHorizontal: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 25,
-    shadowOffset: { width: 0, height: 10 },
+    ...shadow({ opacity: 0.18, radius: 25, x: 0, y: 10 }),
     elevation: 15,
   },
 

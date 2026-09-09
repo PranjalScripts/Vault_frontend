@@ -1,8 +1,8 @@
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
-import type { Todo } from "@/app/todos/features/types";
-import type { Passcode } from "@/app/passcodes/types";
-import { getPlatformIcon } from "@/app/passcodes/utils/passcodeCrypto";
+import type { Todo } from "@/features/todos/features/types";
+import type { Passcode } from "@/features/passcodes/types";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export type DashboardSubject = { _id: string; subjectName: string; topics?: { _id?: string; topic: string }[] };
 
@@ -32,7 +32,7 @@ export function SubjectsPreview({ subjects, loading, theme, onOpen }: { subjects
   if (!subjects.length) return <Empty label="No subjects yet. Create your first subject." theme={theme} />;
   return <>{subjects.slice(0, 3).map((subject, index) => (
     <TouchableOpacity key={subject._id} onPress={() => onOpen(subject._id)} activeOpacity={0.7} style={[styles.row, index > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-      <View style={[styles.itemIcon, { backgroundColor: index % 2 ? "#EAF7EE" : "#F1ECFF" }]}><Text>{index % 2 ? "▣" : "▤"}</Text></View>
+      <BrandLogo name={subject.subjectName} size={34} />
       <View style={styles.rowCopy}>
         <Text numberOfLines={1} style={[styles.primary, { color: theme.text }]}>{subject.subjectName}</Text>
         <Text style={[styles.secondary, { color: theme.textSecondary }]}>{subject.topics?.length || 0} {(subject.topics?.length || 0) === 1 ? "topic" : "topics"}</Text>
@@ -48,7 +48,7 @@ export function PasscodesPreview({ passcodes, loading, unlocked, theme }: { pass
   if (!passcodes.length) return <Empty label="No passcodes saved yet." theme={theme} />;
   return <>{passcodes.slice(0, 3).map((item, index) => (
     <View key={item._id} style={[styles.row, index > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-      <View style={[styles.itemIcon, { backgroundColor: theme.accentMuted }]}><Text>{getPlatformIcon(item.platform)}</Text></View>
+      <BrandLogo name={item.platform} kind="platform" size={34} />
       <View style={styles.rowCopy}><Text numberOfLines={1} style={[styles.primary, { color: theme.text }]}>{item.platform}</Text><Text numberOfLines={1} style={[styles.secondary, { color: theme.textSecondary }]}>{item.username}</Text></View>
       <Text style={[styles.mask, { color: theme.textSecondary }]}>••••••••</Text>
     </View>

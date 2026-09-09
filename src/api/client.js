@@ -4,13 +4,14 @@ const API_CACHE_TIME = 10 * 60 * 1000;
 const apiCache = new Map();
 
 const API = create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.69:6307/api/",
+  baseURL: process.env.EXPO_PUBLIC_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
 });
+console.log("API URL:", process.env.EXPO_PUBLIC_API_URL);
 
-const isCacheableGet = (url = "") => true;
+const isCacheableGet = (url = "") => url !== "/search";
 
 const isPersistentCacheableGet = (url = "") =>
   ["/vault", "/passcodes"].some(

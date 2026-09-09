@@ -454,7 +454,7 @@ export const verifyVaultKey = async (vaultKey, verifier) => {
     const decryptedVerifier = await decryptWithVaultKey(verifier, vaultKey);
 
     return decryptedVerifier === VERIFIER_TEXT;
-  } catch (error) {
+  } catch {
     return false;
   }
 };

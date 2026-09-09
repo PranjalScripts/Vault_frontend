@@ -5,54 +5,61 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 
-import {
-  Stack,
-  useRouter,
-  useSegments,
-} from "expo-router";
+import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+
+import * as ExpoSplashScreen from "expo-splash-screen";
 
 import { StatusBar } from "expo-status-bar";
 
-import {
-  useMemo,
-  useEffect,
-  useState,
-} from "react";
+import { Platform, View } from "react-native";
+
+import { useMemo, useEffect, useState } from "react";
 
 import Toast from "react-native-toast-message";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTheme } from "@/hooks/use-theme";
 
-import {
-  getAuthToken,
-  subscribeToAuthChanges,
-} from "@/api/api";
+import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
+
+const SPLASH_BACKGROUND = "#FBFAF4";
+const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings"];
+
+// Hold the single native splash before React mounts. Never replace it with a JS logo.
+if (Platform.OS !== "web") {
+  ExpoSplashScreen.preventAutoHideAsync().catch(console.warn);
+  if (Platform.OS === "ios") ExpoSplashScreen.setOptions({ fade: true, duration: 200 });
+}
 
 // =========================================================
 // VAULT CONTEXT
 // =========================================================
-
 
 // =========================================================
 // ROOT LAYOUT
 // =========================================================
 
 export default function RootLayout() {
-  const colorScheme =
-    useColorScheme();
+  const colorScheme = useColorScheme();
 
   const theme = useTheme();
 
   const router = useRouter();
 
   const segments = useSegments();
+  const navigationState = useRootNavigationState();
+  const [rootLaidOut, setRootLaidOut] = useState(false);
+  const [startupComplete, setStartupComplete] = useState(Platform.OS === "web");
 
-  const [isReady, setIsReady] =
-    useState(false);
+  const [isReady, setIsReady] = useState(false);
 
-  const [isAuthenticated, setIsAuthenticated] =
-    useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    document.title = "Vault";
+  }, []);
 
   /*
    * =========================================================
@@ -65,35 +72,22 @@ export default function RootLayout() {
 
     const initAuth = async () => {
       try {
-        const token =
-          await getAuthToken();
+        const token = await getAuthToken();
 
         if (!mounted) {
           return;
         }
 
-        console.log(
-          "🔐 INITIAL AUTH CHECK"
-        );
+        console.log("🔐 INITIAL AUTH CHECK");
 
-        console.log(
-          "Token exists:",
-          !!token
-        );
+        console.log("Token exists:", !!token);
 
-        setIsAuthenticated(
-          !!token
-        );
+        setIsAuthenticated(!!token);
       } catch (error) {
-        console.error(
-          "❌ Auth initialization failed:",
-          error
-        );
+        console.error("❌ Auth initialization failed:", error);
 
         if (mounted) {
-          setIsAuthenticated(
-            false
-          );
+          setIsAuthenticated(false);
         }
       } finally {
         if (mounted) {
@@ -116,19 +110,11 @@ export default function RootLayout() {
    */
 
   useEffect(() => {
-    const unsubscribe =
-      subscribeToAuthChanges(
-        (authenticated: boolean) => {
-          console.log(
-            "🔄 AUTH STATE CHANGED:",
-            authenticated
-          );
+    const unsubscribe = subscribeToAuthChanges((authenticated: boolean) => {
+      console.log("🔄 AUTH STATE CHANGED:", authenticated);
 
-          setIsAuthenticated(
-            authenticated
-          );
-        }
-      );
+      setIsAuthenticated(authenticated);
+    });
 
     return unsubscribe;
   }, []);
@@ -139,98 +125,41 @@ export default function RootLayout() {
    * =========================================================
    */
 
+  const currentRoute = segments[0];
+  const isProtectedRoute = !!currentRoute && PROTECTED_ROUTES.includes(currentRoute);
+  const redirectTarget = !isAuthenticated && isProtectedRoute
+    ? "/"
+    : isAuthenticated && !currentRoute
+      ? "/dashboard"
+      : null;
+
   useEffect(() => {
-    if (!isReady) {
-      return;
+    // The Stack must be mounted before dispatching the existing auth redirects.
+    if (isReady && navigationState?.key && redirectTarget) {
+      router.replace(redirectTarget);
     }
+  }, [isReady, navigationState?.key, redirectTarget, router]);
 
-    const currentRoute =
-      segments[0];
-
-    /*
-     * Routes which require login.
-     */
-
-    const protectedRoutes = [
-      "subjects",
-      "todos",
-      "passcodes",
-      "dashboard",
-      "settings",
-    ];
-
-    const isProtectedRoute =
-      !!currentRoute &&
-      protectedRoutes.includes(
-        currentRoute
-      );
-
-    /*
-     * =======================================================
-     * CASE 1
-     * =======================================================
-     *
-     * User is NOT authenticated.
-     *
-     * User tries:
-     *
-     * /passcodes
-     * /todos
-     * /subjects
-     *
-     * Redirect to login.
-     */
-
-    if (
-      !isAuthenticated &&
-      isProtectedRoute
-    ) {
-      console.log(
-        "🚫 Protected route blocked:",
-        currentRoute
-      );
-
-      router.replace("/");
-
-      return;
-    }
-
-    /*
-     * =======================================================
-     * CASE 2
-     * =======================================================
-     *
-     * User IS authenticated.
-     *
-     * User opens:
-     *
-     * /
-     *
-     * Redirect to Dashboard.
-     */
-
-    if (
-      isAuthenticated &&
-      !currentRoute
-    ) {
-      console.log(
-        "✅ User authenticated"
-      );
-
-      console.log(
-        "➡️ Redirecting to /dashboard"
-      );
-
-      router.replace(
-        "/dashboard"
-      );
-    }
-  }, [
-    isReady,
-    isAuthenticated,
-    segments,
-    router,
-  ]);
+  useEffect(() => {
+    if (startupComplete || !isReady || !rootLaidOut || !navigationState?.key || redirectTarget) return;
+    // Give the resolved route a layout/paint turn under the native splash. There is
+    // no timer, blank-screen phase, minimum brand delay, or second splash component.
+    let cancelled = false;
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        if (cancelled) return;
+        ExpoSplashScreen.hideAsync()
+          .then(() => { if (!cancelled) setStartupComplete(true); })
+          .catch(console.warn);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
+  }, [startupComplete, isReady, rootLaidOut, navigationState?.key, redirectTarget, segments]);
 
   /*
    * =========================================================
@@ -238,49 +167,27 @@ export default function RootLayout() {
    * =========================================================
    */
 
-  const navigationTheme =
-    useMemo(() => {
-      const base =
-        colorScheme === "dark"
-          ? DarkTheme
-          : DefaultTheme;
+  const navigationTheme = useMemo(() => {
+    const base = colorScheme === "dark" ? DarkTheme : DefaultTheme;
 
-      return {
-        ...base,
+    return {
+      ...base,
 
-        colors: {
-          ...base.colors,
+      colors: {
+        ...base.colors,
 
-          background:
-            theme.background,
+        background: theme.background,
 
-          card:
-            theme.background,
+        card: theme.background,
 
-          text:
-            theme.text,
+        text: theme.text,
 
-          border:
-            theme.border,
+        border: theme.border,
 
-          primary:
-            theme.accent,
-        },
-      };
-    }, [
-      colorScheme,
-      theme,
-    ]);
-
-  /*
-   * =========================================================
-   * WAIT FOR AUTH CHECK
-   * =========================================================
-   */
-
-  if (!isReady) {
-    return null;
-  }
+        primary: theme.accent,
+      },
+    };
+  }, [colorScheme, theme]);
 
   /*
    * =========================================================
@@ -305,38 +212,28 @@ export default function RootLayout() {
    */
 
   return (
-    <ThemeProvider
-      value={navigationTheme}
-    >
+    <ThemeProvider value={navigationTheme}>
       <VaultProvider>
-        <StatusBar
-          style={
-            colorScheme === "dark"
-              ? "light"
-              : "dark"
-          }
-        />
-
+        <StatusBar style={startupComplete && colorScheme === "dark" ? "light" : "dark"} />
+        <View style={{ flex: 1, backgroundColor: SPLASH_BACKGROUND }} onLayout={() => setRootLaidOut(true)}>
         <Stack
           screenOptions={{
-            headerShadowVisible:
-              false,
+            // Do not animate the initial redirect behind the launch screen.
+            animation: startupComplete ? "default" : "none",
+            headerShadowVisible: false,
 
-            headerTintColor:
-              theme.text,
+            headerTintColor: theme.text,
 
             headerTitleStyle: {
               fontWeight: "700",
             },
 
             headerStyle: {
-              backgroundColor:
-                theme.background,
+              backgroundColor: theme.background,
             },
 
             contentStyle: {
-              backgroundColor:
-                theme.background,
+              backgroundColor: theme.background,
             },
           }}
         >
@@ -374,8 +271,14 @@ export default function RootLayout() {
           <Stack.Screen
             name="subjects/[id]"
             options={{
+              headerShown: false,
               title: "Topics",
             }}
+          />
+
+          <Stack.Screen
+            name="subjects/[id]/topic"
+            options={{ headerShown: false }}
           />
 
           {/* =================================================
@@ -407,19 +310,23 @@ export default function RootLayout() {
               ================================================= */}
 
           <Stack.Screen
+            name="search"
+            options={{ headerShown: false, title: "Search" }}
+          />
+
+          <Stack.Screen
+            name="trash"
+            options={{ headerShown: false, title: "Recently Deleted" }}
+          />
+
+          <Stack.Screen
             name="browser"
             options={{
               title: "Browser",
             }}
           />
-
-          <Stack.Screen
-            name="explore"
-            options={{
-              title: "Explore",
-            }}
-          />
         </Stack>
+        </View>
 
         <Toast />
       </VaultProvider>

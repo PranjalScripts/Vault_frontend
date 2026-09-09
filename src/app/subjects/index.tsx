@@ -1,456 +1,520 @@
-import React, { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ScrollView,
-} from "react-native";
-import { useFocusEffect, useRouter, Stack } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import Feather from "@expo/vector-icons/Feather";
 import { AppLayout } from "@/components/AppLayout";
-
-import { createSubject, deleteSubject, getSubjects, logout } from "@/api/api";
+import {
+  createSubject,
+  deleteSubject,
+  getSubjects,
+  updateSubject,
+} from "@/api/api";
 import { useTheme } from "@/hooks/use-theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  Button,
+  Empty,
+  Field,
+  FormModal,
+  Search,
+  Subject,
+  SubjectStats,
+  s,
+} from "@/components/subjects/SubjectUI";
+import { SubjectCard } from "@/components/subjects/SubjectCard";
 
-type Topic = {
-  _id?: string;
-  srNo: number | string;
-  topic: string;
-  url?: string;
+const emptyStats: SubjectStats = {
+  subjects: 0,
+  topics: 0,
+  links: 0,
+  completed: 0,
+  files: 0,
+  withLinksPercent: 0,
 };
-
-type Subject = {
-  _id: string;
-  subjectName: string;
-  topics: Topic[];
-  updatedAt?: string;
-};
-
+const sorts = [
+  { value: "recent", label: "Recently Added" },
+  { value: "name", label: "Name A–Z" },
+  { value: "updated", label: "Recently Updated" },
+] as const;
 export default function SubjectsScreen() {
+  const t = useTheme();
+  const dark = useColorScheme() === "dark";
   const router = useRouter();
-  const theme = useTheme();
-
+  const { width } = useWindowDimensions();
+  const mobile = width < 768;
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [subjectName, setSubjectName] = useState("");
+  const [stats, setStats] = useState(emptyStats);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-
-  const fetchSubjects = async () => {
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("recent");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState("");
+  const [editing, setEditing] = useState<Subject | null>(null);
+  const [menu, setMenu] = useState<Subject | null>(null);
+  const [deleting, setDeleting] = useState<Subject | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
+  const request = useRef(0);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const fetchSubjects = useCallback(async () => {
+    const sequence = ++request.current;
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-
-      const response = await getSubjects();
-
+      const response = await getSubjects({
+        page,
+        limit: 18,
+        search: query,
+        sort,
+      });
+      if (sequence !== request.current) return;
+      if (page > 1 && page > response.data.pagination.totalPages) {
+        setPage(Math.max(1, response.data.pagination.totalPages));
+        return;
+      }
       setSubjects(response.data.data);
-    } catch (error) {
-      console.log("GET SUBJECTS ERROR:", error);
-
-      Alert.alert(
-        "Error",
-        "Unable to load subjects. Please check your backend connection.",
-      );
+      setStats(response.data.stats);
+      setPages(response.data.pagination.totalPages);
+      setTotal(response.data.pagination.total);
+    } catch {
+      if (sequence === request.current)
+        setError("Your subjects could not be loaded. Please try again.");
     } finally {
-      setLoading(false);
+      if (sequence === request.current) setLoading(false);
     }
-  };
-
+  }, [page, query, sort]);
   useFocusEffect(
     useCallback(() => {
-      fetchSubjects();
-    }, []),
+      void fetchSubjects();
+      return () => {
+        request.current++;
+      };
+    }, [fetchSubjects]),
   );
-
-  const handleCreateSubject = async () => {
-    const name = subjectName.trim();
-
-    if (!name) {
-      Alert.alert("Missing name", "Please enter a subject name.");
+  const openForm = (subject?: Subject) => {
+    setEditing(subject || null);
+    setName(subject?.subjectName || "");
+    setFormError("");
+    setMenu(null);
+    setShowForm(true);
+  };
+  const save = async () => {
+    if (busy) return;
+    if (!name.trim()) {
+      setFormError("Enter a subject name to continue.");
       return;
     }
-
+    setBusy(true);
+    setFormError("");
     try {
-      setCreating(true);
-
-      const response = await createSubject(name);
-
-      const newSubject = response.data.data;
-
-      setSubjects((currentSubjects) => [...currentSubjects, newSubject]);
-
-      setSubjectName("");
-    } catch (error) {
-      console.log("CREATE SUBJECT ERROR:", error);
-
-      Alert.alert("Error", "Unable to create the subject.");
+      if (editing) await updateSubject(editing._id, name.trim());
+      else await createSubject(name.trim());
+      setShowForm(false);
+      await fetchSubjects();
+    } catch {
+      setFormError("Unable to save this subject. Please try again.");
     } finally {
-      setCreating(false);
+      setBusy(false);
     }
   };
-
-  const handleDeleteSubject = (id: string) => {
-    if (Platform.OS === "web") {
-      if (window.confirm("Are you sure you want to delete this subject?")) {
-        deleteSubjectAndUpdateList(id);
-      }
-      return;
-    }
-
-    Alert.alert(
-      "Delete Subject",
-      "Are you sure you want to delete this subject?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteSubjectAndUpdateList(id),
-        },
-      ],
-    );
-  };
-
-  const deleteSubjectAndUpdateList = async (id: string) => {
+  const remove = async () => {
+    if (!deleting || busy) return;
+    setBusy(true);
+    setFormError("");
     try {
-      await deleteSubject(id);
-
-      setSubjects((currentSubjects) =>
-        currentSubjects.filter((subject) => subject._id !== id),
-      );
-    } catch (error) {
-      console.log("DELETE SUBJECT ERROR:", error);
-
-      Alert.alert("Error", "Unable to delete the subject.");
+      await deleteSubject(deleting._id);
+      setDeleting(null);
+      await fetchSubjects();
+    } catch {
+      setFormError("Unable to delete this subject. Please try again.");
+    } finally {
+      setBusy(false);
     }
   };
-
-  const getSubjectIcon = (subjectName: string) => {
-    const name = subjectName.toLowerCase();
-    if (name.includes("spring") || name.includes("boot") || name.includes("java")) {
-      return "🌱";
-    } else if (name.includes("react") || name.includes("js") || name.includes("javascript")) {
-      return "⚛️";
-    } else if (name.includes("python") || name.includes("py")) {
-      return "🐍";
-    } else if (name.includes("data") || name.includes("database") || name.includes("sql")) {
-      return "🗄️";
-    } else if (name.includes("design") || name.includes("ui") || name.includes("ux")) {
-      return "🎨";
-    } else if (name.includes("web") || name.includes("html") || name.includes("css")) {
-      return "🌐";
-    } else if (name.includes("mobile") || name.includes("app") || name.includes("ios") || name.includes("android")) {
-      return "📱";
-    } else if (name.includes("security") || name.includes("auth") || name.includes("password")) {
-      return "🔒";
-    } else if (name.includes("algorithm") || name.includes("code") || name.includes("programming")) {
-      return "💻";
-    } else {
-      return "📁";
-    }
-  };
-
-  const formatUpdatedTime = (updatedAt?: string) => {
-    if (!updatedAt) return "";
-    const date = new Date(updatedAt);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return "Updated today";
-    if (diffDays === 1) return "Updated 1 day ago";
-    if (diffDays < 7) return `Updated ${diffDays} days ago`;
-    if (diffDays < 30) return `Updated ${Math.floor(diffDays / 7)} weeks ago`;
-    return `Updated ${Math.floor(diffDays / 30)} months ago`;
-  };
-
-  const renderSubject = (item: Subject) => {
-    const topicCount = item.topics?.length || 0;
-    const subjectIcon = getSubjectIcon(item.subjectName);
-    const updatedTime = formatUpdatedTime(item.updatedAt);
-
-    return (
-      <TouchableOpacity
-        style={[
-          styles.subjectCard,
-          {
-            backgroundColor: theme.backgroundElement,
-            borderColor: theme.border,
-          },
-        ]}
-        activeOpacity={0.82}
-        onPress={() =>
-          router.push({
-            pathname: "/subjects/[id]",
-            params: {
-              id: item._id,
-            },
-          })
-        }
-      >
-        <View style={styles.subjectIconContainer}>
-          <Text style={styles.subjectIcon}>{subjectIcon}</Text>
-        </View>
-
-        <View style={styles.subjectInfo}>
-          <Text style={[styles.subjectName, { color: theme.text }]}>
-            {item.subjectName}
-          </Text>
-
-          <View style={styles.subjectMeta}>
-            <Text style={[styles.topicCount, { color: theme.textSecondary }]}>
-              {topicCount} {topicCount === 1 ? "topic" : "topics"}
-            </Text>
-            {updatedTime && (
-              <>
-                <Text style={[styles.metaSeparator, { color: theme.textSecondary }]}>•</Text>
-                <Text style={[styles.updatedTime, { color: theme.textSecondary }]}>
-                  {updatedTime}
-                </Text>
-              </>
-            )}
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.moreButton}
-          onPress={() => handleDeleteSubject(item._id)}
-          hitSlop={8}
+  const statCards = [
+    {
+      icon: "book-open",
+      value: stats.subjects,
+      label: mobile ? "Subjects" : "Total Subjects",
+      tint: "#F4FAF5",
+      color: "#16813D",
+    },
+    {
+      icon: "file-text",
+      value: stats.topics,
+      label: mobile ? "Topics" : "Total Topics",
+      tint: "#F7F3FF",
+      color: "#7033E8",
+    },
+    {
+      icon: "link",
+      value: stats.links,
+      label: mobile ? "Links" : "Useful Links",
+      tint: "#F1F8FF",
+      color: "#087AE9",
+    },
+    {
+      icon: "bar-chart-2",
+      value: `${stats.withLinksPercent}%`,
+      label: mobile ? "With links" : "Topics with links",
+      tint: "#F2FAF4",
+      color: "#16813D",
+    },
+  ] as const;
+  const statsView = (
+    <View style={{ flexDirection: "row", gap: mobile ? 8 : 16 }}>
+      {statCards.map((stat) => (
+        <View
+          key={stat.label}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: mobile ? 10 : 18,
+            paddingVertical: mobile ? 16 : 18,
+            borderWidth: 1,
+            borderColor: dark ? t.border : `${stat.color}18`,
+            backgroundColor: dark ? t.backgroundElement : stat.tint,
+            borderRadius: 9,
+            alignItems: mobile ? "center" : "flex-start",
+            gap: mobile ? 8 : 10,
+          }}
         >
-          <Text style={[styles.moreIcon, { color: theme.textSecondary }]}>⋮</Text>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    );
-  };
-
+          <View
+            style={{
+              backgroundColor: dark ? t.backgroundSelected : `${stat.color}0D`,
+              borderRadius: 9,
+              padding: mobile ? 3 : 8,
+            }}
+          >
+            <Feather
+              name={stat.icon}
+              size={mobile ? 22 : 24}
+              color={dark ? t.accent : stat.color}
+            />
+          </View>
+          <Text
+            style={{
+              color: t.text,
+              fontSize: mobile ? 22 : 28,
+              fontWeight: "700",
+            }}
+          >
+            {loading || error ? "—" : stat.value}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{ color: t.textSecondary, fontSize: mobile ? 10 : 12 }}
+          >
+            {stat.label}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
   return (
     <AppLayout
-      title="Subjects"
-      subtitle="Organize your subjects and their topics"
-      scrollable={false}
+      mobileTitle="Subjects"
+      contentBackgroundColor={dark ? t.background : "#FFFFFF"}
+      mobileHeaderActions={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add Subject"
+          onPress={() => openForm()}
+          style={{
+            width: 44,
+            height: 44,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Feather name="plus" size={27} color={t.accent} />
+        </Pressable>
+      }
     >
+      <Stack.Screen options={{ headerShown: false }} />
       <View
-        style={[
-          styles.createContainer,
-          {
-            backgroundColor: theme.backgroundElement,
-            borderColor: theme.border,
-          },
-        ]}
+        style={[s.page, { gap: mobile ? 14 : 18 }, mobile && { padding: 16 }]}
       >
-        <TextInput
-          style={[styles.input, { color: theme.text, borderColor: theme.border }]}
-          placeholder="Enter new subject name..."
-          placeholderTextColor={theme.textSecondary}
-          value={subjectName}
-          onChangeText={setSubjectName}
-          onSubmitEditing={handleCreateSubject}
-          returnKeyType="done"
-        />
-
-        <TouchableOpacity
-          style={[
-            styles.addButton,
-            { backgroundColor: theme.accent },
-            creating && styles.disabledButton,
-          ]}
-          onPress={handleCreateSubject}
-          disabled={creating}
+        {!mobile && (
+          <View>
+            <Text
+              style={{
+                color: t.text,
+                fontSize: 30,
+                fontWeight: "800",
+                letterSpacing: -0.8,
+              }}
+            >
+              Subjects
+            </Text>
+            <Text style={[s.body, { color: t.textSecondary, marginTop: 4 }]}>
+              Organize your learning resources by subjects and topics.
+            </Text>
+          </View>
+        )}
+        {mobile && statsView}
+        <View
+          style={{
+            flexDirection: mobile ? "column" : "row",
+            flexWrap: mobile ? "nowrap" : "wrap",
+            gap: 12,
+            alignItems: mobile ? "stretch" : "center",
+          }}
         >
-          {creating ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.addButtonText}>+ Add Subject</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.accent} />
-          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-            Loading subjects...
-          </Text>
-        </View>
-      ) : (
-        <ScrollView 
-          style={styles.subjectList}
-          contentContainerStyle={
-            subjects.length === 0 ? styles.emptyList : styles.list
-          }
-          showsVerticalScrollIndicator={false}
-        >
-          {subjects.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <View
-                style={[
-                  styles.emptyIconWrap,
-                  { backgroundColor: theme.accentMuted },
-                ]}
-              >
-                <Text style={styles.emptyIcon}>📚</Text>
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                No subjects yet
-              </Text>
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                Add your first subject above.
-              </Text>
+          <Search
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search subjects or topics…"
+          />
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 12,
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Button
+              secondary
+              label={`↕  Sort: ${sorts.find((item) => item.value === sort)?.label}  ⌄`}
+              onPress={() => setSortOpen(true)}
+            />
+            <View
+              style={{
+                flexDirection: "row",
+                borderWidth: 1,
+                borderColor: t.border,
+                borderRadius: 9,
+                padding: 2,
+              }}
+            >
+              {(["grid", "list"] as const).map((value) => (
+                <Pressable
+                  key={value}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${value === "grid" ? "Grid" : "List"} view`}
+                  accessibilityState={{ selected: layout === value }}
+                  onPress={() => setLayout(value)}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 7,
+                    backgroundColor:
+                      layout === value ? t.backgroundSelected : "transparent",
+                  }}
+                >
+                  <Feather
+                    name={value === "grid" ? "grid" : "list"}
+                    size={17}
+                    color={layout === value ? t.accent : t.textSecondary}
+                  />
+                </Pressable>
+              ))}
             </View>
-          ) : (
-            subjects.map((subject) => (
-              <View key={subject._id}>
-                {renderSubject(subject)}
-              </View>
-            ))
+          </View>
+          {!mobile && (
+            <Button label="+  Add Subject" onPress={() => openForm()} />
           )}
-        </ScrollView>
-      )}
+        </View>
+        {!mobile && statsView}
+        {loading ? (
+          <Empty
+            loading
+            title="Loading your library"
+            description="Gathering your subjects and resources…"
+          />
+        ) : error ? (
+          <Empty
+            title="Couldn’t load subjects"
+            description={error}
+            action="Try again"
+            onPress={fetchSubjects}
+          />
+        ) : !subjects.length ? (
+          <Empty
+            title={query ? "No matching subjects" : "Create your first subject"}
+            description={
+              query
+                ? "Try a different subject or topic name."
+                : "Collect your topics, useful links, and files in one place."
+            }
+            action={query ? "Clear search" : "+ Add Subject"}
+            onPress={query ? () => setSearch("") : () => openForm()}
+          />
+        ) : (
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: mobile ? 9 : 16,
+            }}
+          >
+            {subjects.map((subject) => (
+              <View
+                key={subject._id}
+                style={{
+                  width:
+                    mobile || layout === "list"
+                      ? "100%"
+                      : width >= 1150
+                        ? "31.9%"
+                        : width >= 850
+                          ? "48.5%"
+                          : "100%",
+                }}
+              >
+                <SubjectCard
+                  subject={subject}
+                  compact={mobile ? layout === "grid" : layout === "list"}
+                  onOpen={() =>
+                    router.push({
+                      pathname: "/subjects/[id]",
+                      params: { id: subject._id },
+                    })
+                  }
+                  onMenu={() => setMenu(subject)}
+                />
+              </View>
+            ))}
+          </View>
+        )}
+        {!loading && !error && total > 0 && (
+          <View style={s.row}>
+            <Text style={{ color: t.textSecondary, fontSize: 12 }}>
+              {total} {total === 1 ? "subject" : "subjects"}
+              {query ? " found" : ""}
+              {pages > 1 ? ` · Page ${page} of ${pages}` : ""}
+            </Text>
+            {pages > 1 && (
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Button
+                  secondary
+                  label="Previous"
+                  disabled={page <= 1}
+                  onPress={() => setPage((value) => value - 1)}
+                />
+                <Button
+                  secondary
+                  label="Next"
+                  disabled={page >= pages}
+                  onPress={() => setPage((value) => value + 1)}
+                />
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+      <FormModal
+        visible={sortOpen}
+        title="Sort subjects"
+        subtitle="Choose how your library is ordered."
+        onClose={() => setSortOpen(false)}
+      >
+        {sorts.map((item) => (
+          <Button
+            key={item.value}
+            secondary={sort !== item.value}
+            label={item.label}
+            onPress={() => {
+              setSort(item.value);
+              setPage(1);
+              setSortOpen(false);
+            }}
+          />
+        ))}
+      </FormModal>
+      <FormModal
+        visible={!!menu}
+        title={menu?.subjectName || "Subject"}
+        subtitle="Manage this learning collection."
+        onClose={() => setMenu(null)}
+      >
+        <Button
+          secondary
+          label="Rename subject"
+          onPress={() => {
+            if (menu) openForm(menu);
+          }}
+        />
+        <Button
+          secondary
+          danger
+          label="Delete subject"
+          onPress={() => {
+            setDeleting(menu);
+            setMenu(null);
+            setFormError("");
+          }}
+        />
+      </FormModal>
+      <FormModal
+        visible={showForm}
+        title={editing ? "Rename subject" : "Add Subject"}
+        subtitle="Give your learning collection a name."
+        onClose={() => {
+          if (!busy) setShowForm(false);
+        }}
+      >
+        <Field
+          label="Subject name"
+          placeholder="e.g. Java"
+          value={name}
+          onChangeText={setName}
+        />
+        {formError ? (
+          <Text
+            accessibilityRole="alert"
+            style={[s.error, { color: t.danger }]}
+          >
+            {formError}
+          </Text>
+        ) : null}
+        <Button
+          label={busy ? "Saving…" : editing ? "Save changes" : "Add Subject"}
+          disabled={busy}
+          onPress={save}
+        />
+      </FormModal>
+      <FormModal
+        visible={!!deleting}
+        title="Delete subject?"
+        subtitle={`“${deleting?.subjectName || ""}” and its topics and file references will move to Recently Deleted and can be restored during the restore period.`}
+        onClose={() => {
+          if (!busy) setDeleting(null);
+        }}
+      >
+        {formError ? (
+          <Text style={{ color: t.danger }}>{formError}</Text>
+        ) : null}
+        <Button
+          danger
+          label={busy ? "Deleting…" : "Delete subject"}
+          disabled={busy}
+          onPress={remove}
+        />
+        <Button
+          secondary
+          label="Keep subject"
+          disabled={busy}
+          onPress={() => setDeleting(null)}
+        />
+      </FormModal>
     </AppLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  createContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    height: 48,
-    fontSize: 15,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-  },
-  addButton: {
-    height: 48,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    minWidth: 120,
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  list: {
-    paddingBottom: 24,
-    flexGrow: 1,
-  },
-  subjectList: {
-    flex: 1,
-  },
-  subjectCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingRight: 16,
-    paddingLeft: 16,
-    marginBottom: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-    minHeight: 72,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  subjectIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#F0F0F0",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 14,
-  },
-  subjectIcon: {
-    fontSize: 22,
-  },
-  subjectInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  subjectName: {
-    fontSize: 16,
-    fontWeight: "600",
-    lineHeight: 22,
-    marginBottom: 4,
-  },
-  subjectMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  topicCount: {
-    fontSize: 13,
-  },
-  metaSeparator: {
-    marginHorizontal: 6,
-    fontSize: 13,
-  },
-  updatedTime: {
-    fontSize: 13,
-  },
-  moreButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  moreIcon: {
-    fontSize: 20,
-    fontWeight: "300",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-  },
-  emptyList: {
-    flexGrow: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingBottom: 100,
-  },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  emptyIcon: {
-    fontSize: 28,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  emptyText: {
-    marginTop: 6,
-    fontSize: 14,
-  },
-});

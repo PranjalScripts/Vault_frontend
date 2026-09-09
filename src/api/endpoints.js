@@ -2,7 +2,9 @@ import API, { forceRefresh } from "./client";
 
 export const googleLogin = (idToken) => API.post("/auth/google", { idToken });
 
-export const getSubjects = () => API.get("/subjects/getAll-subjects");
+/** @param {{ page?: number, limit?: number, search?: string, sort?: string }} [options] */
+export const getSubjects = (options = {}) =>
+  API.get("/subjects/getAll-subjects", { params: options });
 
 export const refreshSubjects = () => forceRefresh("/subjects/getAll-subjects");
 
@@ -10,6 +12,9 @@ export const getSubject = (id) => API.get(`/subjects/${id}`);
 
 export const createSubject = (subjectName) =>
   API.post("/subjects/create-subject", { subjectName });
+
+export const updateSubject = (id, data) =>
+  API.put(`/subjects/${id}`, typeof data === "string" ? { subjectName: data } : data);
 
 export const addTopic = (subjectId, topicData) =>
   API.post(`/subjects/${subjectId}/topics`, topicData);
@@ -23,12 +28,22 @@ export const updateTopic = (subjectId, topicId, topicData) =>
 export const deleteTopic = (subjectId, topicId) =>
   API.delete(`/subjects/${subjectId}/topics/${topicId}`);
 
-/** @param {{ page?: number, limit?: number, status?: "completed" | "pending", search?: string, sort?: string, category?: string, due?: string }} [options] */
-export const getTodos = ({ page = 1, limit = 10, status, search, sort, category, due } = {}) =>
+/** @param {{ page?: number, limit?: number, status?: "completed" | "pending", search?: string, sort?: string, category?: string, due?: string, itemId?: string }} [options] */
+export const getTodos = ({
+  page = 1,
+  limit = 10,
+  status,
+  search,
+  sort,
+  category,
+  due,
+  itemId,
+} = {}) =>
   API.get("/todos", {
     params: {
       page,
       limit,
+      ...(itemId ? { itemId } : {}),
       ...(status && status !== "all" ? { status } : {}),
       ...(search?.trim() ? { search: search.trim() } : {}),
       ...(sort ? { sort } : {}),
@@ -66,11 +81,13 @@ export const getPasscodes = ({
   limit = 20,
   search = "",
   sort = "newest",
+  itemId = "",
 } = {}) =>
   API.get("/passcodes", {
     params: {
       page,
       limit,
+      ...(itemId ? { itemId } : {}),
       ...(search.trim() ? { search: search.trim() } : {}),
       sort,
     },
@@ -108,3 +125,9 @@ export const resetVaultPassword = ({
     passwordWrappedVaultKey,
     verifier,
   });
+
+export const getTrash = () => forceRefresh("/trash");
+export const restoreTrash = (kind, id, subjectId) =>
+  API.post(`/trash/${kind}/${id}/restore`, { subjectId });
+
+export const universalSearch = (params, signal) => API.get("/search", { params, signal });

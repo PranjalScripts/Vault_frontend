@@ -1,4 +1,6 @@
+import { shadow } from "@/styles/shadow";
 import React from "react";
+import Feather from "@expo/vector-icons/Feather";
 import {
   View,
   Text,
@@ -7,10 +9,11 @@ import {
   Modal,
   useWindowDimensions,
   ScrollView,
+  TextInput,
 } from "react-native";
-import { useRouter, usePathname } from "expo-router";
+import { useRouter, usePathname, useFocusEffect } from "expo-router";
 import { useTheme } from "@/hooks/use-theme";
-import { logout } from "@/api/api";
+import { logout, universalSearch } from "@/api/api";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -23,6 +26,9 @@ export function AppLayout({
   mobileTitle,
   mobileHeaderActions,
   scrollable = true,
+  contentBackgroundColor,
+  mobileBackAction,
+  desktopBreadcrumb,
 }: {
   children: React.ReactNode;
   title?: string;
@@ -30,15 +36,202 @@ export function AppLayout({
   mobileTitle?: string;
   mobileHeaderActions?: React.ReactNode;
   scrollable?: boolean;
+  contentBackgroundColor?: string;
+  mobileBackAction?: () => void;
+  desktopBreadcrumb?: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const router = useRouter();
   const pathname = usePathname();
+  useFocusEffect(
+    React.useCallback(() => {
+      if (
+        typeof window === "undefined" ||
+        typeof window.addEventListener !== "function" ||
+        typeof window.removeEventListener !== "function"
+      )
+        return;
+      const shortcut = (event: KeyboardEvent) => {
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "k"
+        ) {
+          event.preventDefault();
+          if (pathname !== "/search") router.push("/search" as never);
+        }
+      };
+      window.addEventListener("keydown", shortcut);
+      return () => window.removeEventListener("keydown", shortcut);
+    }, [pathname, router]),
+  );
+  const subjectNavigation = pathname.startsWith("/subjects");
+  const navigationIcon = (
+    path: string,
+  ): "home" | "check-square" | "book-open" | "lock" | "trash-2" | "search" =>
+    path === "/search"
+      ? "search"
+      : path === "/trash"
+        ? "trash-2"
+        : path === "/dashboard"
+          ? "home"
+          : path === "/todos"
+            ? "check-square"
+            : path === "/subjects"
+              ? "book-open"
+              : "lock";
   const insets = useSafeAreaInsets();
 
-  const [mobileMenuVisible, setMobileMenuVisible] =
-    React.useState(false);
+  const [mobileMenuVisible, setMobileMenuVisible] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchResults, setSearchResults] = React.useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    const term = searchQuery.trim();
+    if (term.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const response = await universalSearch(
+          { q: term, kind: "all", page: 1, includePasscodes: true },
+          controller.signal,
+        );
+        setSearchResults(response.data?.data || []);
+      } catch {
+        if (!controller.signal.aborted) setSearchResults([]);
+      } finally {
+        if (!controller.signal.aborted) setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery]);
+
+  const handleSearchPress = () => setSearchOpen((open) => !open);
+
+  const openSearchResult = (result: any) => {
+    setSearchOpen(false);
+    if (result.kind === "subject")
+      router.push({ pathname: "/subjects/[id]", params: { id: result.id } });
+    else if (result.kind === "topic")
+      router.push({
+        pathname: "/subjects/[id]/topic",
+        params: { id: result.subjectId, topicId: result.id },
+      });
+    else if (result.kind === "todo")
+      router.push({ pathname: "/todos", params: { itemId: result.id } });
+    else if (result.kind === "passcode")
+      router.push({ pathname: "/passcodes", params: { itemId: result.id } });
+  };
+
+  const searchModal = (
+    <Modal
+      visible={searchOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setSearchOpen(false)}
+    >
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "flex-start",
+          alignItems: "center",
+          paddingTop: 96,
+          paddingHorizontal: 20,
+          backgroundColor: "rgba(0, 0, 0, 0.35)",
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 620,
+            maxHeight: "75%",
+            padding: 20,
+            borderRadius: 14,
+            backgroundColor: theme.backgroundElement,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Feather name="search" size={21} color={theme.textSecondary} />
+            <TextInput
+              autoFocus
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search everything..."
+              placeholderTextColor={theme.textSecondary}
+              accessibilityLabel="Global search"
+              returnKeyType="search"
+              style={{
+                flex: 1,
+                height: 44,
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 8,
+                color: theme.text,
+              }}
+            />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Close search"
+              onPress={() => setSearchOpen(false)}
+            >
+              <Feather name="x" size={22} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          {searchQuery.trim().length >= 2 && (
+            <View style={{ marginTop: 16 }}>
+              {searchLoading ? (
+                <Text style={{ padding: 10, color: theme.textSecondary }}>
+                  Searching...
+                </Text>
+              ) : searchResults.length ? (
+                searchResults.slice(0, 8).map((result) => (
+                  <TouchableOpacity
+                    key={`${result.kind}:${result.id}`}
+                    onPress={() => openSearchResult(result)}
+                    style={{
+                      padding: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.border,
+                    }}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: theme.text, fontWeight: "600" }}
+                    >
+                      {result.title}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: theme.textSecondary, fontSize: 12 }}
+                    >
+                      {result.kind}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={{ padding: 10, color: theme.textSecondary }}>
+                  No matches found
+                </Text>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
 
   /*
    * =========================================================
@@ -75,7 +268,8 @@ export function AppLayout({
       path: "/passcodes",
       icon: "🔒",
     },
-    
+
+    { name: "Recently Deleted", path: "/trash", icon: "🗑️" },
     // {
     //   name: "Settings",
     //   path: "/settings",
@@ -126,10 +320,7 @@ export function AppLayout({
 
       console.log("✅ NAVIGATION SENT:", path);
     } catch (error) {
-      console.error(
-        "❌ NAVIGATION ERROR:",
-        error
-      );
+      console.error("❌ NAVIGATION ERROR:", error);
     }
   };
 
@@ -151,10 +342,7 @@ export function AppLayout({
 
       router.replace("/");
     } catch (error) {
-      console.error(
-        "❌ Logout error:",
-        error
-      );
+      console.error("❌ Logout error:", error);
 
       router.replace("/");
     }
@@ -177,6 +365,7 @@ export function AppLayout({
           },
         ]}
       >
+        {searchModal}
         {/* =================================================
             SIDEBAR
             ================================================= */}
@@ -185,24 +374,30 @@ export function AppLayout({
           style={[
             styles.sidebar,
             {
-              borderRightColor:
-                theme.border,
-              backgroundColor:
-                theme.background,
+              borderRightColor: theme.border,
+              backgroundColor: theme.background,
             },
           ]}
         >
           {/* Logo */}
 
-          <View
-            style={styles.sidebarHeader}
-          >
-            <View style={[styles.brandMark, { backgroundColor: theme.accentMuted }]}>
-              <Text style={[styles.brandMarkText, { color: theme.accent }]}>V</Text>
+          <View style={styles.sidebarHeader}>
+            <View
+              style={[styles.brandMark, { backgroundColor: theme.accentMuted }]}
+            >
+              <Text style={[styles.brandMarkText, { color: theme.accent }]}>
+                V
+              </Text>
             </View>
             <View>
-              <Text style={[styles.brandText, { color: theme.text }]}>Vault</Text>
-              <Text style={[styles.brandCaption, { color: theme.textSecondary }]}>Personal workspace</Text>
+              <Text style={[styles.brandText, { color: theme.text }]}>
+                Vault
+              </Text>
+              <Text
+                style={[styles.brandCaption, { color: theme.textSecondary }]}
+              >
+                Personal workspace
+              </Text>
             </View>
           </View>
 
@@ -211,17 +406,16 @@ export function AppLayout({
           <ScrollView
             style={styles.sidebarNav}
             contentContainerStyle={styles.sidebarNavContent}
-            showsVerticalScrollIndicator={
-              false
-            }
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={[styles.navSectionLabel, { color: theme.textSecondary }]}>WORKSPACE</Text>
+            <Text
+              style={[styles.navSectionLabel, { color: theme.textSecondary }]}
+            >
+              WORKSPACE
+            </Text>
             {navItems.map((item) => {
               const isActive =
-                pathname === item.path ||
-                pathname.startsWith(
-                  item.path + "/"
-                );
+                pathname === item.path || pathname.startsWith(item.path + "/");
 
               return (
                 <TouchableOpacity
@@ -229,34 +423,39 @@ export function AppLayout({
                   style={[
                     styles.navItem,
                     isActive && {
-                      backgroundColor:
-                        theme.accentMuted,
+                      backgroundColor: theme.accentMuted,
                       borderColor: `${theme.accent}22`,
                     },
                   ]}
-                  onPress={() =>
-                    handleNav(
-                      item.path
-                    )
-                  }
+                  onPress={() => handleNav(item.path)}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.navIconWrap, isActive && { backgroundColor: theme.backgroundElement }]}>
-                    <Text style={styles.navIcon}>{item.icon}</Text>
+                  <View
+                    style={[
+                      styles.navIconWrap,
+                      isActive && { backgroundColor: theme.backgroundElement },
+                    ]}
+                  >
+                    <>
+                      {subjectNavigation ? (
+                        <Feather
+                          name={navigationIcon(item.path)}
+                          size={20}
+                          color={isActive ? theme.accent : theme.textSecondary}
+                        />
+                      ) : (
+                        <Text style={styles.navIcon}>{item.icon}</Text>
+                      )}
+                    </>
                   </View>
 
                   <Text
                     style={[
                       styles.navText,
                       {
-                        color: isActive
-                          ? theme.accent
-                          : theme.textSecondary,
+                        color: isActive ? theme.accent : theme.textSecondary,
 
-                        fontWeight:
-                          isActive
-                            ? "600"
-                            : "400",
+                        fontWeight: isActive ? "600" : "400",
                       },
                     ]}
                   >
@@ -270,27 +469,16 @@ export function AppLayout({
           {/* Stay Organized */}
 
           <View
-              style={[
-                styles.stayOrganizedCard,
-                {
-                  backgroundColor:
-                    theme.backgroundElement,
-                  borderColor: theme.border,
-                },
-              ]}
+            style={[
+              styles.stayOrganizedCard,
+              {
+                backgroundColor: theme.backgroundElement,
+                borderColor: theme.border,
+              },
+            ]}
           >
-            <View
-              style={
-                styles.organizedIconWrap
-              }
-            >
-              <Text
-                style={
-                  styles.organizedIcon
-                }
-              >
-                🗂️
-              </Text>
+            <View style={styles.organizedIconWrap}>
+              <Text style={styles.organizedIcon}>🗂️</Text>
             </View>
 
             <Text
@@ -308,33 +496,50 @@ export function AppLayout({
               style={[
                 styles.organizedDesc,
                 {
-                  color:
-                    theme.textSecondary,
+                  color: theme.textSecondary,
                 },
               ]}
             >
-              Store your notes, links, PDFs
-              and tasks in one place.
+              Store your notes, links, PDFs and tasks in one place.
             </Text>
           </View>
 
           {/* Logout */}
 
           <TouchableOpacity
-            style={[styles.logoutItem, { backgroundColor: `${theme.danger}0C`, borderColor: `${theme.danger}22` }]}
+            style={[
+              styles.logoutItem,
+              {
+                backgroundColor: `${theme.danger}0C`,
+                borderColor: `${theme.danger}22`,
+              },
+            ]}
             onPress={handleLogout}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Log out of Vault"
           >
-            <View style={[styles.logoutIconWrap, { backgroundColor: `${theme.danger}14` }]}>
-              <Text style={[styles.logoutIcon, { color: theme.danger }]}>↪</Text>
+            <View
+              style={[
+                styles.logoutIconWrap,
+                { backgroundColor: `${theme.danger}14` },
+              ]}
+            >
+              <Text style={[styles.logoutIcon, { color: theme.danger }]}>
+                ↪
+              </Text>
             </View>
             <View style={styles.logoutCopy}>
-              <Text style={[styles.logoutText, { color: theme.danger }]}>Log out</Text>
-              <Text style={[styles.logoutHint, { color: theme.textSecondary }]}>End this session</Text>
+              <Text style={[styles.logoutText, { color: theme.danger }]}>
+                Log out
+              </Text>
+              <Text style={[styles.logoutHint, { color: theme.textSecondary }]}>
+                End this session
+              </Text>
             </View>
-            <Text style={[styles.logoutChevron, { color: theme.danger }]}>›</Text>
+            <Text style={[styles.logoutChevron, { color: theme.danger }]}>
+              ›
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -346,8 +551,7 @@ export function AppLayout({
           style={[
             styles.mainContent,
             {
-              backgroundColor:
-                theme.background,
+              backgroundColor: contentBackgroundColor || theme.background,
             },
           ]}
         >
@@ -359,47 +563,31 @@ export function AppLayout({
             style={[
               styles.topbar,
               {
-                borderBottomColor:
-                  theme.border,
+                borderBottomColor: theme.border,
               },
             ]}
           >
-            <View
-              style={styles.topbarRight}
-            >
+            {desktopBreadcrumb && (
+              <View style={{ flex: 1, minWidth: 0 }}>{desktopBreadcrumb}</View>
+            )}
+            <View style={styles.topbarRight}>
               <TouchableOpacity
                 style={styles.iconBtn}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Search everything"
+                onPress={handleSearchPress}
               >
-                <Text
-                  style={styles.iconText}
-                >
-                  🔍
-                </Text>
+                <Text style={styles.iconText}>🔍</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.iconBtn}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={styles.iconText}
-                >
-                  🔔
-                </Text>
+              <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
+                <Text style={styles.iconText}>🔔</Text>
               </TouchableOpacity>
 
-              <View
-                style={styles.profileBadge}
-              >
-                <View
-                  style={styles.avatar}
-                >
-                  <Text
-                    style={styles.avatarText}
-                  >
-                    P
-                  </Text>
+              <View style={styles.profileBadge}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>P</Text>
                 </View>
 
                 <Text
@@ -429,24 +617,17 @@ export function AppLayout({
                   paddingBottom: 40,
                 },
               ]}
-              showsVerticalScrollIndicator={
-                false
-              }
+              showsVerticalScrollIndicator={false}
             >
               {/* Page Header */}
 
               {title && (
-                <View
-                  style={
-                    styles.pageHeader
-                  }
-                >
+                <View style={styles.pageHeader}>
                   <Text
                     style={[
                       styles.pageTitle,
                       {
-                        color:
-                          theme.text,
+                        color: theme.text,
                       },
                     ]}
                   >
@@ -458,8 +639,7 @@ export function AppLayout({
                       style={[
                         styles.pageSubtitle,
                         {
-                          color:
-                            theme.textSecondary,
+                          color: theme.textSecondary,
                         },
                       ]}
                     >
@@ -471,13 +651,7 @@ export function AppLayout({
 
               {/* Normal Scrollable Children */}
 
-              <View
-                style={
-                  styles.childrenContainer
-                }
-              >
-                {children}
-              </View>
+              <View style={styles.childrenContainer}>{children}</View>
             </ScrollView>
           ) : (
             /*
@@ -491,25 +665,16 @@ export function AppLayout({
              * which contain a FlatList.
              */
 
-            <View
-              style={
-                styles.desktopContentArea
-              }
-            >
+            <View style={styles.desktopContentArea}>
               {/* Page Header */}
 
               {title && (
-                <View
-                  style={
-                    styles.pageHeader
-                  }
-                >
+                <View style={styles.pageHeader}>
                   <Text
                     style={[
                       styles.pageTitle,
                       {
-                        color:
-                          theme.text,
+                        color: theme.text,
                       },
                     ]}
                   >
@@ -521,8 +686,7 @@ export function AppLayout({
                       style={[
                         styles.pageSubtitle,
                         {
-                          color:
-                            theme.textSecondary,
+                          color: theme.textSecondary,
                         },
                       ]}
                     >
@@ -535,10 +699,7 @@ export function AppLayout({
               {/* FLEX CHILDREN */}
 
               <View
-                style={[
-                  styles.childrenContainer,
-                  styles.childrenContainerFlex,
-                ]}
+                style={[styles.childrenContainer, styles.childrenContainerFlex]}
               >
                 {children}
               </View>
@@ -560,8 +721,7 @@ export function AppLayout({
       style={[
         styles.mobileContainer,
         {
-          backgroundColor:
-            theme.background,
+          backgroundColor: theme.background,
         },
       ]}
     >
@@ -574,29 +734,24 @@ export function AppLayout({
         style={[
           styles.mobileHeaderSafeArea,
           {
-            backgroundColor:
-              theme.background,
+            backgroundColor: contentBackgroundColor || theme.background,
 
-            borderBottomColor:
-              theme.border,
+            borderBottomColor: theme.border,
           },
         ]}
       >
-        <View
-          style={styles.mobileHeader}
-        >
+        {searchModal}
+        <View style={styles.mobileHeader}>
           {/* Menu */}
 
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() =>
-              setMobileMenuVisible(
-                true
-              )
-            }
+            onPress={mobileBackAction || (() => setMobileMenuVisible(true))}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Open menu"
+            accessibilityLabel={
+              mobileBackAction ? "Back to subjects" : "Open menu"
+            }
           >
             <Text
               style={[
@@ -606,16 +761,17 @@ export function AppLayout({
                 },
               ]}
             >
-              ☰
+              {mobileBackAction ? "‹" : "☰"}
             </Text>
           </TouchableOpacity>
 
           {/* Header Title */}
 
           <Text
-            pointerEvents="none"
+            numberOfLines={1}
             style={[
               styles.mobileHeaderTitle,
+              { pointerEvents: "none" },
               {
                 color: theme.text,
               },
@@ -626,11 +782,23 @@ export function AppLayout({
 
           {/* Page actions / notification */}
 
-          {mobileHeaderActions || (
-            <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
-              <Text style={[styles.headerIcon, { color: theme.text }]}>🔔</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Search everything"
+              style={styles.headerButton}
+              onPress={handleSearchPress}
+            >
+              <Feather name="search" size={21} color={theme.text} />
             </TouchableOpacity>
-          )}
+            {mobileHeaderActions || (
+              <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
+                <Text style={[styles.headerIcon, { color: theme.text }]}>
+                  🔔
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </SafeAreaView>
 
@@ -642,39 +810,24 @@ export function AppLayout({
         visible={mobileMenuVisible}
         transparent={true}
         animationType="slide"
-        onRequestClose={() =>
-          setMobileMenuVisible(
-            false
-          )
-        }
+        onRequestClose={() => setMobileMenuVisible(false)}
       >
-        <View
-          style={styles.menuRoot}
-        >
+        <View style={styles.menuRoot}>
           {/* Drawer */}
 
           <View
             style={[
               styles.drawer,
               {
-                width: Math.min(
-                  width * 0.84,
-                  340
-                ),
+                width: Math.min(width * 0.84, 340),
 
-                backgroundColor:
-                  theme.backgroundElement,
+                backgroundColor: theme.backgroundElement,
               },
             ]}
           >
             <SafeAreaView
-              edges={[
-                "top",
-                "bottom",
-              ]}
-              style={
-                styles.drawerSafeArea
-              }
+              edges={["top", "bottom"]}
+              style={styles.drawerSafeArea}
             >
               {/* Profile */}
 
@@ -682,8 +835,7 @@ export function AppLayout({
                 style={[
                   styles.profileSection,
                   {
-                    borderBottomColor:
-                      theme.border,
+                    borderBottomColor: theme.border,
                   },
                 ]}
               >
@@ -691,31 +843,19 @@ export function AppLayout({
                   style={[
                     styles.drawerAvatar,
                     {
-                      backgroundColor:
-                        theme.accent,
+                      backgroundColor: theme.accent,
                     },
                   ]}
                 >
-                  <Text
-                    style={
-                      styles.drawerAvatarText
-                    }
-                  >
-                    P
-                  </Text>
+                  <Text style={styles.drawerAvatarText}>P</Text>
                 </View>
 
-                <View
-                  style={
-                    styles.profileDetails
-                  }
-                >
+                <View style={styles.profileDetails}>
                   <Text
                     style={[
                       styles.welcomeText,
                       {
-                        color:
-                          theme.text,
+                        color: theme.text,
                       },
                     ]}
                   >
@@ -726,8 +866,7 @@ export function AppLayout({
                     style={[
                       styles.drawerUserName,
                       {
-                        color:
-                          theme.text,
+                        color: theme.text,
                       },
                     ]}
                   >
@@ -738,25 +877,17 @@ export function AppLayout({
                     style={[
                       styles.signedInText,
                       {
-                        color:
-                          theme.textSecondary,
+                        color: theme.textSecondary,
                       },
                     ]}
                   >
-                    You are signed in to
-                    Vault
+                    You are signed in to Vault
                   </Text>
                 </View>
 
                 <TouchableOpacity
-                  style={
-                    styles.drawerCloseButton
-                  }
-                  onPress={() =>
-                    setMobileMenuVisible(
-                      false
-                    )
-                  }
+                  style={styles.drawerCloseButton}
+                  onPress={() => setMobileMenuVisible(false)}
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel="Close menu"
@@ -765,8 +896,7 @@ export function AppLayout({
                     style={[
                       styles.drawerCloseText,
                       {
-                        color:
-                          theme.text,
+                        color: theme.text,
                       },
                     ]}
                   >
@@ -778,23 +908,14 @@ export function AppLayout({
               {/* Navigation */}
 
               <ScrollView
-                style={
-                  styles.drawerScroll
-                }
-                contentContainerStyle={
-                  styles.drawerScrollContent
-                }
-                showsVerticalScrollIndicator={
-                  false
-                }
+                style={styles.drawerScroll}
+                contentContainerStyle={styles.drawerScrollContent}
+                showsVerticalScrollIndicator={false}
               >
                 {navItems.map((item) => {
                   const isActive =
-                    pathname ===
-                      item.path ||
-                    pathname.startsWith(
-                      item.path + "/"
-                    );
+                    pathname === item.path ||
+                    pathname.startsWith(item.path + "/");
 
                   return (
                     <TouchableOpacity
@@ -802,38 +923,21 @@ export function AppLayout({
                       style={[
                         styles.drawerNavItem,
                         isActive && {
-                          backgroundColor:
-                            theme.accentMuted,
+                          backgroundColor: theme.accentMuted,
                         },
                       ]}
-                      onPress={() =>
-                        handleNav(
-                          item.path
-                        )
-                      }
+                      onPress={() => handleNav(item.path)}
                       activeOpacity={0.7}
                     >
-                      <Text
-                        style={
-                          styles.drawerNavIcon
-                        }
-                      >
-                        {item.icon}
-                      </Text>
+                      <Text style={styles.drawerNavIcon}>{item.icon}</Text>
 
                       <Text
                         style={[
                           styles.drawerNavText,
                           {
-                            color:
-                              isActive
-                                ? theme.accent
-                                : theme.text,
+                            color: isActive ? theme.accent : theme.text,
 
-                            fontWeight:
-                              isActive
-                                ? "600"
-                                : "400",
+                            fontWeight: isActive ? "600" : "400",
                           },
                         ]}
                       >
@@ -850,26 +954,51 @@ export function AppLayout({
                 style={[
                   styles.drawerBottom,
                   {
-                    borderTopColor:
-                      theme.border,
+                    borderTopColor: theme.border,
                   },
                 ]}
               >
                 <TouchableOpacity
-                  style={[styles.drawerLogout, { backgroundColor: `${theme.danger}0C`, borderColor: `${theme.danger}22` }]}
-                  onPress={
-                    handleLogout
-                  }
+                  style={[
+                    styles.drawerLogout,
+                    {
+                      backgroundColor: `${theme.danger}0C`,
+                      borderColor: `${theme.danger}22`,
+                    },
+                  ]}
+                  onPress={handleLogout}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.drawerLogoutIconWrap, { backgroundColor: `${theme.danger}14` }]}>
-                    <Text style={[styles.drawerLogoutIcon, { color: theme.danger }]}>↪</Text>
+                  <View
+                    style={[
+                      styles.drawerLogoutIconWrap,
+                      { backgroundColor: `${theme.danger}14` },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.drawerLogoutIcon, { color: theme.danger }]}
+                    >
+                      ↪
+                    </Text>
                   </View>
                   <View style={styles.logoutCopy}>
-                    <Text style={[styles.drawerLogoutText, { color: theme.danger }]}>Log out</Text>
-                    <Text style={[styles.logoutHint, { color: theme.textSecondary }]}>End this session</Text>
+                    <Text
+                      style={[styles.drawerLogoutText, { color: theme.danger }]}
+                    >
+                      Log out
+                    </Text>
+                    <Text
+                      style={[
+                        styles.logoutHint,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      End this session
+                    </Text>
                   </View>
-                  <Text style={[styles.logoutChevron, { color: theme.danger }]}>›</Text>
+                  <Text style={[styles.logoutChevron, { color: theme.danger }]}>
+                    ›
+                  </Text>
                 </TouchableOpacity>
               </View>
             </SafeAreaView>
@@ -880,11 +1009,7 @@ export function AppLayout({
           <TouchableOpacity
             style={styles.menuBackdrop}
             activeOpacity={1}
-            onPress={() =>
-              setMobileMenuVisible(
-                false
-              )
-            }
+            onPress={() => setMobileMenuVisible(false)}
             accessibilityLabel="Close menu"
           />
         </View>
@@ -895,30 +1020,25 @@ export function AppLayout({
           ================================================= */}
 
       <View
-        style={styles.mobileMainContent}
+        style={[
+          styles.mobileMainContent,
+          { backgroundColor: contentBackgroundColor || theme.background },
+        ]}
       >
         {scrollable ? (
           <ScrollView
             style={styles.mobileScroll}
-           
-            showsVerticalScrollIndicator={
-              false
-            }
+            showsVerticalScrollIndicator={false}
           >
             {/* Page Header */}
 
             {title && (
-              <View
-                style={
-                  styles.pageHeader
-                }
-              >
+              <View style={styles.pageHeader}>
                 <Text
                   style={[
                     styles.pageTitle,
                     {
-                      color:
-                        theme.text,
+                      color: theme.text,
                     },
                   ]}
                 >
@@ -930,8 +1050,7 @@ export function AppLayout({
                     style={[
                       styles.pageSubtitle,
                       {
-                        color:
-                          theme.textSecondary,
+                        color: theme.textSecondary,
                       },
                     ]}
                   >
@@ -943,13 +1062,7 @@ export function AppLayout({
 
             {/* Normal Scrollable Children */}
 
-            <View
-              style={
-                styles.childrenContainer
-              }
-            >
-              {children}
-            </View>
+            <View style={styles.childrenContainer}>{children}</View>
           </ScrollView>
         ) : (
           /*
@@ -972,17 +1085,12 @@ export function AppLayout({
             {/* Page Header */}
 
             {title && (
-              <View
-                style={
-                  styles.pageHeader
-                }
-              >
+              <View style={styles.pageHeader}>
                 <Text
                   style={[
                     styles.pageTitle,
                     {
-                      color:
-                        theme.text,
+                      color: theme.text,
                     },
                   ]}
                 >
@@ -994,8 +1102,7 @@ export function AppLayout({
                     style={[
                       styles.pageSubtitle,
                       {
-                        color:
-                          theme.textSecondary,
+                        color: theme.textSecondary,
                       },
                     ]}
                   >
@@ -1008,10 +1115,7 @@ export function AppLayout({
             {/* FLEX CHILDREN */}
 
             <View
-              style={[
-                styles.childrenContainer,
-                styles.childrenContainerFlex,
-              ]}
+              style={[styles.childrenContainer, styles.childrenContainerFlex]}
             >
               {children}
             </View>
@@ -1028,54 +1132,48 @@ export function AppLayout({
         style={[
           styles.bottomNav,
           {
-            backgroundColor:
-              theme.background,
+            backgroundColor: contentBackgroundColor || theme.background,
 
-            borderTopColor:
-              theme.border,
+            borderTopColor: theme.border,
           },
         ]}
       >
         {bottomNavItems.map((item) => {
           const isActive =
-            pathname === item.path ||
-            pathname.startsWith(
-              item.path + "/"
-            );
+            pathname === item.path || pathname.startsWith(item.path + "/");
 
           return (
             <TouchableOpacity
               key={item.name}
-              style={
-                styles.bottomNavItem
-              }
-              onPress={() =>
-                handleNav(
-                  item.path
-                )
-              }
+              style={styles.bottomNavItem}
+              onPress={() => handleNav(item.path)}
               activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.bottomNavIcon,
-                  {
-                    color: isActive
-                      ? theme.accent
-                      : theme.textSecondary,
-                  },
-                ]}
-              >
-                {item.icon}
-              </Text>
+              {subjectNavigation ? (
+                <Feather
+                  name={navigationIcon(item.path)}
+                  size={23}
+                  color={isActive ? theme.accent : theme.textSecondary}
+                  style={{ marginBottom: 4 }}
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.bottomNavIcon,
+                    {
+                      color: isActive ? theme.accent : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  {item.icon}
+                </Text>
+              )}
 
               <Text
                 style={[
                   styles.bottomNavText,
                   {
-                    color: isActive
-                      ? theme.accent
-                      : theme.textSecondary,
+                    color: isActive ? theme.accent : theme.textSecondary,
                   },
                 ]}
               >
@@ -1238,7 +1336,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  logoutIconWrap: { width: 35, height: 35, borderRadius: 9, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  logoutIconWrap: {
+    width: 35,
+    height: 35,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
   logoutIcon: { fontSize: 18, fontWeight: "700" },
   logoutCopy: { flex: 1, minWidth: 0 },
   logoutText: { fontSize: 13, fontWeight: "700" },
@@ -1368,9 +1473,9 @@ const styles = StyleSheet.create({
   },
 
   mobileHeaderTitle: {
-    position: "absolute",
-    left: 96,
-    right: 96,
+    flex: 1,
+    minWidth: 0,
+    marginHorizontal: 8,
     textAlign: "center",
     fontSize: 18,
     fontWeight: "700",
@@ -1465,13 +1570,7 @@ const styles = StyleSheet.create({
     height: "100%",
     alignSelf: "stretch",
     elevation: 20,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 4,
-      height: 0,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    ...shadow({ opacity: 0.25, radius: 12, x: 4, y: 0 }),
   },
 
   drawerSafeArea: {
@@ -1480,8 +1579,7 @@ const styles = StyleSheet.create({
 
   menuBackdrop: {
     flex: 1,
-    backgroundColor:
-      "rgba(0, 0, 0, 0.45)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
   },
 
   /*
@@ -1607,7 +1705,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 
-  drawerLogoutIconWrap: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  drawerLogoutIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
 
   drawerLogoutIcon: {
     fontSize: 18,

@@ -7,8 +7,9 @@ import React, {
 } from "react";
 import { View } from "react-native";
 import Toast from "react-native-toast-message";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
+import { Button } from "@/components/subjects/SubjectUI";
 import { AppLayout } from "@/components/AppLayout";
 
 import {
@@ -23,19 +24,19 @@ import { useTheme } from "@/hooks/use-theme";
 import { useVault } from "@/contexts/vaultContext";
 
 import { encryptWithVaultKey, decryptWithVaultKey } from "@/crypto/vaultCrypto";
-import type { Passcode, RawPasscode, SortOption } from "./types";
-import { isEncryptedField } from "./utils/passcodeCrypto";
-import { PasscodeCard } from "./components/PasscodeCard";
-import { PasscodeForm } from "./components/PasscodeForm";
-import { PasscodesHeader } from "./components/PasscodesHeader";
-import { PasscodeModals } from "./components/PasscodeModals";
-import { styles } from "./styles";
-import { VaultModal } from "./components/VaultModal";
-import { VaultStateView } from "./components/VaultStateView";
+import type { Passcode, RawPasscode, SortOption } from "@/features/passcodes/types";
+import { isEncryptedField } from "@/features/passcodes/utils/passcodeCrypto";
+import { PasscodeCard } from "@/features/passcodes/components/PasscodeCard";
+import { PasscodeForm } from "@/features/passcodes/components/PasscodeForm";
+import { PasscodesHeader } from "@/features/passcodes/components/PasscodesHeader";
+import { PasscodeModals } from "@/features/passcodes/components/PasscodeModals";
+import { styles } from "@/features/passcodes/styles";
+import { VaultModal } from "@/features/passcodes/components/VaultModal";
+import { VaultStateView } from "@/features/passcodes/components/VaultStateView";
 import ForgotVaultPasswordModal from "@/components/ForgotVaultPasswordModal";
-import { usePasscodeForm } from "./hooks/usePasscodeForm";
-import { usePasscodes } from "./hooks/usePasscodes";
-import { useVaultModal } from "./hooks/useVaultModal";
+import { usePasscodeForm } from "@/features/passcodes/hooks/usePasscodeForm";
+import { usePasscodes } from "@/features/passcodes/hooks/usePasscodes";
+import { useVaultModal } from "@/features/passcodes/hooks/useVaultModal";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -45,6 +46,8 @@ const DEFAULT_PAGE_SIZE = 20;
 
 export default function PasscodesScreen() {
   const theme = useTheme();
+  const { itemId } = useLocalSearchParams<{ itemId?: string }>();
+  const router = useRouter();
 
   const {
     vaultKey,
@@ -234,7 +237,8 @@ export default function PasscodesScreen() {
         const response = await getPasscodes({
           page: requestedPage,
           limit: requestedPageSize,
-          search: searchValue.trim(),
+          search: itemId ? "" : searchValue.trim(),
+          itemId,
           sort: requestedSort,
         });
 
@@ -264,7 +268,7 @@ export default function PasscodesScreen() {
 
         const normalizedSearch = searchValue.trim().toLowerCase();
 
-        if (normalizedSearch) {
+        if (normalizedSearch && !itemId) {
           decryptedData = decryptedData.filter(
             (item) =>
               item.platform.toLowerCase().includes(normalizedSearch) ||
@@ -313,7 +317,7 @@ export default function PasscodesScreen() {
         setLoading(false);
       }
     },
-    [decryptPasscode, isVaultCreated, isVaultUnlocked, vaultKey],
+    [decryptPasscode, isVaultCreated, isVaultUnlocked, vaultKey, itemId],
   );
 
   // =====================================================
@@ -851,6 +855,7 @@ export default function PasscodesScreen() {
         }}
       >
         <View style={styles.container}>
+          {!!itemId && <Button label="Show all passcodes" secondary onPress={() => { router.setParams({ itemId: "" }); setSearch(""); }} />}
           <PasscodesHeader
             theme={theme}
             isVaultLoading={isVaultLoading}

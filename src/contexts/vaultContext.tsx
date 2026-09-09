@@ -17,7 +17,6 @@ import {
 import {
   createVaultCredentials,
   unlockVault as unlockVaultCrypto,
-  verifyVaultKey,
 } from "../crypto/vaultCrypto";
 
 // =========================================================
@@ -428,7 +427,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
         console.log("🔓 Vault unlocked");
 
         return true;
-      } catch (error) {
+      } catch {
         /*
          * Wrong password or
          * invalid verifier.
