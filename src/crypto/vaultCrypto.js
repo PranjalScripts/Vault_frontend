@@ -482,3 +482,16 @@ export const getVaultCryptoConfig = () => {
     verifier: VERIFIER_TEXT,
   };
 };
+
+// Rewrap the existing master key; never replace the key that encrypts passcodes.
+export const rewrapVaultCredentials = async (currentPassword, newPassword, stored) => {
+  if (typeof newPassword !== "string" || newPassword.trim().length < 4) throw new Error("Use at least 4 characters for the new password");
+  if (newPassword !== newPassword.trim()) throw new Error("The new password cannot start or end with spaces");
+  if (currentPassword === newPassword) throw new Error("Choose a different password");
+  const masterVaultKey = await unlockVault(currentPassword, stored.passwordSalt, stored.passwordWrappedVaultKey, stored.verifier);
+  const passwordSalt = await generateVaultSalt();
+  const wrappingKey = await deriveVaultKey(newPassword, passwordSalt);
+  const passwordWrappedVaultKey = await encryptWithVaultKey(masterVaultKey, wrappingKey);
+  const verifier = await encryptWithVaultKey(VERIFIER_TEXT, wrappingKey);
+  return { previousPasswordSalt: stored.passwordSalt, passwordSalt, passwordWrappedVaultKey, verifier };
+};

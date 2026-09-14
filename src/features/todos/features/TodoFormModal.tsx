@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, Touc
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Todo, TodoCategory } from "@/features/todos/features/types";
 
-const categories: TodoCategory[] = ["Work", "Study", "Personal", "Health", "Other"];
+import { TODO_CATEGORIES } from "@/features/todos/features/types";
 const priorities = ["low", "medium", "high"] as const;
 const weekDays = ["S", "M", "T", "W", "T", "F", "S"];
 export type TodoDraft = { title: string; description: string; category: TodoCategory; priority: "low" | "medium" | "high"; dueDate: string | null };
@@ -11,17 +11,23 @@ export type TodoDraft = { title: string; description: string; category: TodoCate
 const localDate = (value?: string | null) => value ? new Date(value) : null;
 const sameDate = (a: Date | null, b: Date) => !!a && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-export function TodoFormModal({ visible, saving, theme, initialTodo, onClose, onSave }: { visible: boolean; saving: boolean; theme: any; initialTodo?: Todo | null; onClose: () => void; onSave: (draft: TodoDraft) => Promise<void> }) {
+export function TodoFormModal({ visible, saving, theme, initialTodo, availableCategories = TODO_CATEGORIES, onClose, onSave }: { visible: boolean; saving: boolean; theme: any; initialTodo?: Todo | null; availableCategories?: string[]; onClose: () => void; onSave: (draft: TodoDraft) => Promise<void> }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 700;
   const [title, setTitle] = useState(""); const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<TodoCategory>("Other"); const [priority, setPriority] = useState<TodoDraft["priority"]>("medium");
+  const [customCategory, setCustomCategory] = useState("");
+  const [customMode, setCustomMode] = useState(false);
+  const categories = Array.from(new Set([...TODO_CATEGORIES, ...availableCategories, ...(initialTodo?.category ? [initialTodo.category] : [])]));
+  const enteredCategory = customCategory.trim().replace(/\s+/g, " ");
+  const categoryValid = !customMode || (!!enteredCategory && enteredCategory.length <= 40 && enteredCategory.toLowerCase() !== "all" && !/[\u0000-\u001f\u007f]/.test(customCategory));
+  const [category, setCategory] = useState<TodoCategory>("Personal"); const [priority, setPriority] = useState<TodoDraft["priority"]>("medium");
   const [dueDate, setDueDate] = useState<Date | null>(null); const [calendarOpen, setCalendarOpen] = useState(false); const [month, setMonth] = useState(new Date());
 
   useEffect(() => {
     if (!visible) return;
+    setCustomMode(false); setCustomCategory("");
     const selected = localDate(initialTodo?.dueDate);
-    setTitle(initialTodo?.title || ""); setDescription(initialTodo?.description || ""); setCategory(initialTodo?.category || "Other"); setPriority(initialTodo?.priority || "medium"); setDueDate(selected); setMonth(selected || new Date()); setCalendarOpen(false);
+    setTitle(initialTodo?.title || ""); setDescription(initialTodo?.description || ""); setCategory(initialTodo?.category || "Personal"); setPriority(initialTodo?.priority || "medium"); setDueDate(selected); setMonth(selected || new Date()); setCalendarOpen(false);
   }, [initialTodo, visible]);
 
   const calendarDays = useMemo(() => {
@@ -29,24 +35,33 @@ export function TodoFormModal({ visible, saving, theme, initialTodo, onClose, on
     return [...Array(leading).fill(null), ...Array.from({ length: days }, (_, index) => new Date(year, monthIndex, index + 1))];
   }, [month]);
   const changeMonth = (amount: number) => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
-  const submit = async () => { if (!title.trim()) return; await onSave({ title: title.trim(), description: description.trim(), category, priority, dueDate: dueDate ? new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate(), 12).toISOString() : null }); };
+  const submit = async () => { if (!title.trim() || !categoryValid || saving) return; await onSave({ title: title.trim(), description: description.trim(), category: customMode ? (categories.find(value => value.toLowerCase() === enteredCategory.toLowerCase()) || enteredCategory) : category, priority, dueDate: dueDate ? new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate(), 12).toISOString() : null }); };
 
   return <Modal visible={visible} transparent={!isMobile} animationType="none" presentationStyle={isMobile ? "fullScreen" : "overFullScreen"} onRequestClose={onClose}><View style={[styles.root, isMobile && styles.mobileRoot, { backgroundColor: isMobile ? theme.background : "transparent" }]}>{!isMobile && <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />}<SafeAreaView edges={isMobile ? ["top", "bottom"] : []} style={[styles.modal, isMobile && styles.mobileModal, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
     <View style={[styles.header, isMobile && styles.mobileHeader, isMobile && { borderBottomColor: theme.border }]}>{isMobile && <TouchableOpacity onPress={onClose} style={styles.backButton}><Text style={[styles.backText, { color: theme.text }]}>‹</Text></TouchableOpacity>}<View style={styles.headerCopy}><Text style={[styles.title, isMobile && styles.mobileTitle, { color: theme.text }]}>{initialTodo ? "Edit task" : "Add task"}</Text><Text style={[styles.subtitle, { color: theme.textSecondary }]}>{initialTodo ? "Update this task's details." : "Plan the details and stay on track."}</Text></View>{!isMobile && <TouchableOpacity onPress={onClose} style={styles.close}><Text style={[styles.closeText, { color: theme.textSecondary }]}>×</Text></TouchableOpacity>}</View>
     <ScrollView style={styles.formScroll} contentContainerStyle={[styles.formContent, isMobile && styles.mobileFormContent]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Label text="Task title" theme={theme} /><TextInput value={title} onChangeText={setTitle} placeholder="What needs to be done?" placeholderTextColor={theme.textSecondary} style={[styles.input, { color: theme.text, borderColor: theme.border }]} autoFocus />
       <Label text="Description" theme={theme} /><TextInput value={description} onChangeText={setDescription} placeholder="Add helpful details..." placeholderTextColor={theme.textSecondary} multiline style={[styles.input, styles.description, { color: theme.text, borderColor: theme.border }]} />
-      <Label text="Category" theme={theme} /><View style={styles.choices}>{categories.map((value) => <Choice key={value} label={value} active={category === value} theme={theme} onPress={() => setCategory(value)} />)}</View>
+      <Label text="Category" theme={theme} />
+      <View style={styles.choices}>
+        {categories.filter(value => value !== "Other").map(value => <Choice key={value} label={value} active={!customMode && category === value} theme={theme} onPress={() => { setCustomMode(false); setCategory(value); }} />)}
+        <Choice label="Other…" active={customMode || category === "Other"} theme={theme} onPress={() => setCustomMode(true)} />
+      </View>
+      {customMode && <View>
+        <Label text="Your category name" theme={theme} />
+        <TextInput accessibilityLabel="Custom category name" value={customCategory} onChangeText={setCustomCategory} maxLength={40} placeholder="e.g. Gardening" style={[styles.input, { color: theme.text, borderColor: theme.border }]} placeholderTextColor={theme.textSecondary} />
+        <Text style={{ color: !customCategory || categoryValid ? theme.textSecondary : theme.danger, fontSize: 12, marginTop: 6 }}>{!customCategory || categoryValid ? "Give your category a name (up to 40 characters) to reuse it on other tasks." : "Enter 1–40 characters. All is reserved for filtering."}</Text>
+      </View>}
       <Label text="Priority" theme={theme} /><View style={styles.choices}>{priorities.map((value) => <Choice key={value} label={value} active={priority === value} theme={theme} onPress={() => setPriority(value)} />)}</View>
       <Label text="Due date" theme={theme} /><TouchableOpacity onPress={() => setCalendarOpen((value) => !value)} style={[styles.dateButton, { borderColor: calendarOpen ? theme.accent : theme.border }]}><Text style={styles.calendarIcon}>▣</Text><Text style={[styles.dateText, { color: dueDate ? theme.text : theme.textSecondary }]}>{dueDate ? dueDate.toLocaleDateString([], { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "Select a valid date"}</Text><Text style={[styles.dateChevron, { color: theme.textSecondary }]}>{calendarOpen ? "⌃" : "⌄"}</Text></TouchableOpacity>
       {calendarOpen && <View style={[styles.calendar, { borderColor: theme.border }]}><View style={styles.monthHeader}><TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthButton}><Text style={[styles.monthArrow, { color: theme.text }]}>‹</Text></TouchableOpacity><Text style={[styles.monthTitle, { color: theme.text }]}>{month.toLocaleDateString([], { month: "long", year: "numeric" })}</Text><TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthButton}><Text style={[styles.monthArrow, { color: theme.text }]}>›</Text></TouchableOpacity></View><View style={styles.weekRow}>{weekDays.map((day, index) => <Text key={`${day}-${index}`} style={[styles.weekDay, { color: theme.textSecondary }]}>{day}</Text>)}</View><View style={styles.days}>{calendarDays.map((date, index) => <View key={date?.toISOString() || `blank-${index}`} style={styles.dayCell}>{date && <TouchableOpacity onPress={() => { setDueDate(date); setCalendarOpen(false); }} style={[styles.dayButton, sameDate(dueDate, date) && { backgroundColor: theme.accent }]}><Text style={[styles.dayText, { color: sameDate(dueDate, date) ? "#fff" : theme.text }]}>{date.getDate()}</Text></TouchableOpacity>}</View>)}</View><TouchableOpacity onPress={() => { setDueDate(null); setCalendarOpen(false); }} style={styles.clearDate}><Text style={[styles.clearDateText, { color: theme.danger }]}>Clear due date</Text></TouchableOpacity></View>}
     </ScrollView>
-    <View style={[styles.actions, isMobile && styles.mobileActions, isMobile && { borderTopColor: theme.border, backgroundColor: theme.backgroundElement }]}><TouchableOpacity onPress={onClose} style={[styles.cancel, isMobile && styles.mobileActionButton, { borderColor: theme.border }]}><Text style={[styles.cancelText, { color: theme.text }]}>Cancel</Text></TouchableOpacity><TouchableOpacity onPress={submit} disabled={!title.trim() || saving} style={[styles.save, isMobile && styles.mobileActionButton, { backgroundColor: theme.accent, opacity: !title.trim() || saving ? .55 : 1 }]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{initialTodo ? "Save Changes" : "Add Task"}</Text>}</TouchableOpacity></View>
+    <View style={[styles.actions, isMobile && styles.mobileActions, isMobile && { borderTopColor: theme.border, backgroundColor: theme.backgroundElement }]}><TouchableOpacity onPress={onClose} style={[styles.cancel, isMobile && styles.mobileActionButton, { borderColor: theme.border }]}><Text style={[styles.cancelText, { color: theme.text }]}>Cancel</Text></TouchableOpacity><TouchableOpacity onPress={submit} disabled={!title.trim() || !categoryValid || saving} style={[styles.save, isMobile && styles.mobileActionButton, { backgroundColor: theme.accent, opacity: !title.trim() || !categoryValid || saving ? .55 : 1 }]}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{initialTodo ? "Save Changes" : "Add Task"}</Text>}</TouchableOpacity></View>
   </SafeAreaView></View></Modal>;
 }
 
 const Label = ({ text, theme }: any) => <Text style={[styles.label, { color: theme.text }]}>{text}</Text>;
-const Choice = ({ label, active, theme, onPress }: any) => <TouchableOpacity onPress={onPress} style={[styles.choice, { borderColor: active ? theme.accent : theme.border, backgroundColor: active ? theme.accentMuted : "transparent" }]}><Text style={[styles.choiceText, { color: active ? theme.accent : theme.textSecondary }]}>{label}</Text></TouchableOpacity>;
+const Choice = ({ label, active, theme, onPress }: any) => <TouchableOpacity accessibilityRole="radio" accessibilityState={{ checked: active }} accessibilityLabel={label} onPress={onPress} style={[styles.choice, { borderColor: active ? theme.accent : theme.border, backgroundColor: active ? theme.accentMuted : "transparent" }]}><Text style={[styles.choiceText, { color: active ? theme.accent : theme.textSecondary }]}>{label}</Text></TouchableOpacity>;
 
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: "center", justifyContent: "center", padding: 18 }, mobileRoot: { padding: 0, alignItems: "stretch", justifyContent: "flex-start" }, backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,16,13,.45)" }, modal: { width: "100%", maxWidth: 520, maxHeight: "92%", borderWidth: 1, borderRadius: 20, padding: 22 }, mobileModal: { flex: 1, maxWidth: undefined, maxHeight: undefined, borderWidth: 0, borderRadius: 0, padding: 0 }, header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }, mobileHeader: { minHeight: 70, marginBottom: 0, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth }, headerCopy: { flex: 1, minWidth: 0 }, backButton: { width: 42, height: 48, alignItems: "center", justifyContent: "center", marginRight: 6 }, backText: { fontSize: 34, lineHeight: 38 }, title: { fontSize: 20, fontWeight: "800" }, mobileTitle: { fontSize: 19 }, subtitle: { fontSize: 12, marginTop: 4 }, close: { width: 34, height: 34, alignItems: "center", justifyContent: "center" }, closeText: { fontSize: 26 }, formScroll: { flexShrink: 1 }, formContent: { paddingBottom: 2 }, mobileFormContent: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 30 }, label: { fontSize: 12, fontWeight: "700", marginBottom: 7, marginTop: 16 }, input: { minHeight: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 13 }, description: { minHeight: 92, paddingTop: 11, textAlignVertical: "top" }, choices: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, choice: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9 }, choiceText: { fontSize: 11, fontWeight: "700", textTransform: "capitalize" },

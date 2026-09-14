@@ -1,5 +1,6 @@
 import { shadow } from "@/styles/shadow";
 import React from "react";
+import { NavigationIcon } from "./NavigationIcon";
 import Feather from "@expo/vector-icons/Feather";
 import {
   View,
@@ -72,29 +73,6 @@ export function AppLayout({
       return () => window.removeEventListener("keydown", shortcut);
     }, [pathname, router]),
   );
-  const navigationIcon = (
-    path: string,
-  ):
-    | "home"
-    | "check-square"
-    | "book-open"
-    | "lock"
-    | "trash-2"
-    | "search"
-    | "settings" =>
-    path === "/settings"
-      ? "settings"
-      : path === "/search"
-        ? "search"
-        : path === "/trash"
-          ? "trash-2"
-          : path === "/dashboard"
-            ? "home"
-            : path === "/todos"
-              ? "check-square"
-              : path === "/subjects"
-                ? "book-open"
-                : "lock";
   const insets = useSafeAreaInsets();
 
   const [mobileMenuVisible, setMobileMenuVisible] = React.useState(false);
@@ -318,48 +296,41 @@ export function AppLayout({
     {
       name: "Dashboard",
       path: "/dashboard",
-      icon: "🏠",
     },
     {
       name: "Subjects",
       path: "/subjects",
-      icon: "📗",
     },
     {
       name: "To Do",
       path: "/todos",
-      icon: "✅",
     },
     {
       name: "Passcodes",
       path: "/passcodes",
-      icon: "🔒",
     },
 
-    { name: "Recently Deleted", path: "/trash", icon: "🗑️" },
-    { name: "Settings", path: "/settings", icon: "⚙️" },
+    { name: "WhatsApp", path: "/whatsapp" },
+    { name: "Recently Deleted", path: "/trash" },
+    { name: "Settings", path: "/settings" },
   ];
 
   const bottomNavItems = [
     {
       name: "Home",
       path: "/dashboard",
-      icon: "🏠",
     },
     {
       name: "To Do",
       path: "/todos",
-      icon: "✅",
     },
     {
       name: "Subjects",
       path: "/subjects",
-      icon: "📗",
     },
     {
       name: "Passcodes",
       path: "/passcodes",
-      icon: "🔒",
     },
   ];
 
@@ -505,9 +476,8 @@ export function AppLayout({
                       isActive && { backgroundColor: theme.backgroundElement },
                     ]}
                   >
-                    <Feather
-                      name={navigationIcon(item.path)}
-                      size={20}
+                    <NavigationIcon path={item.path}
+                      size={22}
                       color={isActive ? theme.accent : theme.textSecondary}
                     />
                   </View>
@@ -994,7 +964,12 @@ export function AppLayout({
                       onPress={() => handleNav(item.path)}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.drawerNavIcon}>{item.icon}</Text>
+                      <View style={styles.drawerNavIcon}>
+                        <NavigationIcon path={item.path}
+                          size={22}
+                          color={isActive ? theme.accent : theme.textSecondary}
+                        />
+                      </View>
 
                       <Text
                         style={[
@@ -1226,9 +1201,8 @@ export function AppLayout({
               onPress={() => handleNav(item.path)}
               activeOpacity={0.7}
             >
-              <Feather
-                name={navigationIcon(item.path)}
-                size={23}
+              <NavigationIcon path={item.path}
+                size={22}
                 color={isActive ? theme.accent : theme.textSecondary}
                 style={{ marginBottom: 4 }}
               />
@@ -1748,9 +1722,9 @@ const styles = StyleSheet.create({
 
   drawerNavIcon: {
     width: 30,
-    fontSize: 19,
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
-    textAlign: "center",
   },
 
   drawerNavText: {
@@ -1832,11 +1806,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flex: 1,
     minHeight: 48,
-  },
-
-  bottomNavIcon: {
-    fontSize: 20,
-    marginBottom: 4,
   },
 
   bottomNavText: {

@@ -5,6 +5,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  ScrollView,
   Platform,
   StyleSheet,
   Text,
@@ -37,6 +38,8 @@ import type {
   TodoStatus,
 } from "@/features/todos/features/types";
 
+import { TODO_CATEGORIES } from "@/features/todos/features/types";
+
 const PAGE_SIZE = 10;
 type MenuAnchor = { x: number; y: number; width: number; height: number };
 type Stats = {
@@ -61,9 +64,13 @@ export default function TodosScreen() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
   const [loading, setLoading] = useState(true);
+  const toggleLock = useRef(false);
+  const [updating, setUpdating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [category, setCategory] = useState("all");
+  const [categories, setCategories] = useState<string[]>(TODO_CATEGORIES);
   const [status, setStatus] = useState<TodoStatus>("all");
   const [sort, setSort] = useState<TodoSort>("newest");
   const [search, setSearch] = useState("");
@@ -104,11 +111,14 @@ export default function TodosScreen() {
             status: itemId || status === "all" ? undefined : status,
             search: itemId ? undefined : query,
             sort,
+            pendingFirst: isMobile,
+            category: itemId || category === "all" ? undefined : category,
             itemId,
           }),
           getTodoStats(),
         ]);
         setTodos(listResponse.data?.data || []);
+        setCategories(listResponse.data?.categories || TODO_CATEGORIES);
         setPage(listResponse.data?.pagination?.page || 1);
         setTotalPages(listResponse.data?.pagination?.totalPages || 0);
         setTotalMatches(listResponse.data?.pagination?.total || 0);
@@ -123,7 +133,7 @@ export default function TodosScreen() {
         setLoading(false);
       }
     },
-    [query, sort, status, itemId],
+    [query, sort, status, category, itemId, isMobile],
   );
 
   useFocusEffect(
@@ -151,6 +161,9 @@ export default function TodosScreen() {
   };
 
   const toggleTodo = async (todo: Todo) => {
+    if (toggleLock.current) return;
+    toggleLock.current = true;
+    setUpdating(true);
     const completed = !todo.isCompleted;
     setTodos((current) =>
       current.map((item) =>
@@ -164,10 +177,15 @@ export default function TodosScreen() {
     }));
     try {
       await updateTodo(todo._id, { isCompleted: completed });
-      if (status !== "all") await load(page);
+      if (status !== "all" || isMobile) await load(page);
     } catch {
+      setTodos(current => current.map(item => item._id === todo._id ? todo : item));
+      setStats(current => ({ ...current, completed: current.completed - (completed ? 1 : -1), pending: current.pending - (completed ? -1 : 1) }));
       await load(page);
       Alert.alert("Unable to update task", "Please try again.");
+    } finally {
+      toggleLock.current = false;
+      setUpdating(false);
     }
   };
 
@@ -268,6 +286,7 @@ export default function TodosScreen() {
               router.setParams({ itemId: "" });
               setSearch("");
               setStatus("all");
+              setCategory("all");
             }}
           />
         </View>
@@ -463,6 +482,15 @@ export default function TodosScreen() {
           </View>
         </View>
       )}
+      {isMobile && status !== "completed" && <Text style={{ color: theme.textSecondary, fontSize: 12, paddingTop: 8 }}>Swipe left on a task to complete it. Pending tasks appear first.</Text>}
+      {!itemId && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 12 }}>
+        {["all", ...Array.from(new Set([...categories, ...(category !== "all" ? [category] : [])]))].map(value => <TouchableOpacity
+          key={value} accessibilityRole="radio" accessibilityState={{ checked: category === value }} accessibilityLabel={value === "all" ? "All categories" : `Category: ${value}`}
+          onPress={() => setCategory(value)}
+          style={{ paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderRadius: 9, borderColor: category === value ? theme.accent : theme.border, backgroundColor: category === value ? theme.accentMuted : theme.backgroundElement }}>
+          <Text style={{ color: category === value ? theme.accent : theme.textSecondary, fontSize: 12, fontWeight: "600" }}>{value === "all" ? "All categories" : value}</Text>
+        </TouchableOpacity>)}
+      </ScrollView>}
       <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
         {(["all", "pending", "completed"] as TodoStatus[]).map((value) => (
           <TouchableOpacity
@@ -561,13 +589,15 @@ export default function TodosScreen() {
           </View>
         )}
         <FlatList
-          data={todos}
+          data={isMobile ? [...todos].sort((a, b) => Number(a.isCompleted) - Number(b.isCompleted)) : todos}
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => (
             <TodoCard
               item={item}
               theme={theme}
               isMobile={isCompact}
+              swipeEnabled={isMobile}
+              updating={updating}
               onToggle={toggleTodo}
               onEdit={(todo) => {
                 setEditingTodo(todo);
@@ -645,6 +675,7 @@ export default function TodosScreen() {
         saving={saving}
         theme={theme}
         initialTodo={editingTodo}
+        availableCategories={categories}
         onClose={() => {
           setFormVisible(false);
           setEditingTodo(null);

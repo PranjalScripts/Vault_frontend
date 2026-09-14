@@ -23,7 +23,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
 import { useThemePreferenceReady } from "@/state/theme-preference";
-const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings"];
+const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp"];
 
 // Hold the single native splash before React mounts. Never replace it with a JS logo.
 if (Platform.OS !== "web") {
@@ -326,6 +326,8 @@ export default function RootLayout() {
             name="search"
             options={{ headerShown: false, title: "Search" }}
           />
+
+          <Stack.Screen name="whatsapp" options={{ headerShown: false, title: "WhatsApp" }} />
 
           <Stack.Screen name="settings" options={{ headerShown: false, title: "Settings" }} />
 

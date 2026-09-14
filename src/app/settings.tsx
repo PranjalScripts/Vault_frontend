@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
+import { ChangeVaultPassword } from "@/components/ChangeVaultPassword";
 import { AppLayout } from "@/components/AppLayout";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -36,11 +37,7 @@ export default function SettingsScreen() {
   const selectedOption =
     options.find((option) => option.value === preference) ?? options[2];
   return (
-    <AppLayout
-      title="Settings"
-      mobileTitle="Settings"
-      subtitle="Make Vault feel right for you."
-    >
+    <AppLayout>
       <View
         style={[
           styles.card,
@@ -140,6 +137,7 @@ export default function SettingsScreen() {
           </View>
         )}
       </View>
+      <ChangeVaultPassword />
     </AppLayout>
   );
 }

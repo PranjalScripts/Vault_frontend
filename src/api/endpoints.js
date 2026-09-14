@@ -28,7 +28,7 @@ export const updateTopic = (subjectId, topicId, topicData) =>
 export const deleteTopic = (subjectId, topicId) =>
   API.delete(`/subjects/${subjectId}/topics/${topicId}`);
 
-/** @param {{ page?: number, limit?: number, status?: "completed" | "pending", search?: string, sort?: string, category?: string, due?: string, itemId?: string }} [options] */
+/** @param {{ page?: number, limit?: number, status?: "completed" | "pending", search?: string, sort?: string, category?: string, due?: string, itemId?: string, pendingFirst?: boolean }} [options] */
 export const getTodos = ({
   page = 1,
   limit = 10,
@@ -38,12 +38,14 @@ export const getTodos = ({
   category,
   due,
   itemId,
+  pendingFirst = false,
 } = {}) =>
   API.get("/todos", {
     params: {
       page,
       limit,
       ...(itemId ? { itemId } : {}),
+      ...(pendingFirst ? { pendingFirst: "true" } : {}),
       ...(status && status !== "all" ? { status } : {}),
       ...(search?.trim() ? { search: search.trim() } : {}),
       ...(sort ? { sort } : {}),
@@ -62,6 +64,9 @@ export const updateTodo = (todoId, todoData) =>
 export const deleteTodo = (todoId) => API.delete(`/todos/${todoId}`);
 
 export const getVault = () => API.get("/vault");
+export const getFreshVault = () => forceRefresh("/vault");
+export const changeVaultPassword = ({ previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier }) =>
+  API.put("/vault/password", { previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier });
 
 export const createVault = ({
   salt,

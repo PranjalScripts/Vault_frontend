@@ -8,6 +8,8 @@ import React, {
 } from "react";
 
 import {
+  getFreshVault,
+  changeVaultPassword as changeVaultPasswordApi,
   getAuthToken,
   getVault,
   createVault,
@@ -15,6 +17,7 @@ import {
 } from "../api/api";
 
 import {
+  rewrapVaultCredentials,
   createVaultCredentials,
   unlockVault as unlockVaultCrypto,
 } from "../crypto/vaultCrypto";
@@ -37,6 +40,8 @@ type VaultContextType = {
   setupVault: (vaultPassword: string) => Promise<void>;
 
   unlockVault: (vaultPassword: string) => Promise<boolean>;
+
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 
   lockVault: () => void;
 
@@ -494,6 +499,21 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [vaultSalt]);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const response = await getFreshVault();
+    const credentials = await rewrapVaultCredentials(currentPassword, newPassword, response.data.data);
+    await changeVaultPasswordApi(credentials);
+    setVaultSalt(credentials.passwordSalt);
+    setPasswordWrappedVaultKey(credentials.passwordWrappedVaultKey);
+    setVaultVerifier(credentials.verifier);
+    setVaultKey(null);
+    setStatus("locked");
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(VAULT_SESSION_KEY);
+      sessionStorage.removeItem(VAULT_LAST_ACTIVE_KEY);
+    }
+  }, []);
+
   // =======================================================
   // DERIVED STATES
   // =======================================================
@@ -529,6 +549,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
       refreshVault,
 
       completeVaultRecovery,
+      changePassword,
     }),
     [
       status,
@@ -541,6 +562,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
       lockVault,
       refreshVault,
       completeVaultRecovery,
+      changePassword,
     ],
   );
 

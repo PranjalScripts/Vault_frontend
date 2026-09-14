@@ -2,7 +2,7 @@ export type Todo = {
   _id: string;
   title: string;
   description: string;
-  category: "Work" | "Study" | "Personal" | "Health" | "Other";
+  category: string;
   priority: "low" | "medium" | "high";
   dueDate?: string | null;
   isCompleted: boolean;
@@ -20,3 +20,5 @@ export type DeleteType =
   | null;
 
 export const PAGE_SIZE = 10;
+
+export const TODO_CATEGORIES = ["Personal", "Study", "Shopping", "Work", "Health", "Finance", "Home", "Travel", "Other"];
