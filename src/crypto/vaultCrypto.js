@@ -1,4 +1,4 @@
-import { pbkdf2, getRandomBytes, encryptAES, decryptAES } from "rn-encryption";
+import { pbkdf2, getRandomBytes, encryptAES, decryptAsyncAES } from "rn-encryption";
 
 // =========================================================
 // CRYPTO VERSION
@@ -147,10 +147,10 @@ export const deriveVaultKey = async (password, salt) => {
     }
 
     return vaultKey;
-  } catch (error) {
-    console.error("VAULT KEY DERIVATION ERROR:", error);
-
-    throw new Error("Unable to derive Vault Key");
+  } catch {
+    const failure = new Error("Unable to unlock on this device. Please try again.");
+    failure.code = "VAULT_CRYPTO_UNAVAILABLE";
+    throw failure;
   }
 };
 
@@ -262,17 +262,18 @@ export const decryptWithVaultKey = async (encryptedData, vaultKey) => {
       payload = btoa(String.fromCharCode(...fullBytes));
     }
 
-    const plaintext = await decryptAES(payload, vaultKey);
+    const plaintext = await decryptAsyncAES(payload, vaultKey);
 
     if (typeof plaintext !== "string") {
       throw new Error("Invalid decrypted data");
     }
 
     return plaintext;
-  } catch (error) {
-    console.error("VAULT DECRYPTION ERROR:", error);
-
-    throw new Error("Unable to decrypt vault data");
+  } catch {
+    // Authentication failures are handled by the caller, not the native error overlay.
+    const failure = new Error("Unable to decrypt vault data");
+    failure.code = "VAULT_DECRYPTION_FAILED";
+    throw failure;
   }
 };
 
@@ -424,9 +425,10 @@ export const unlockVault = async (
 
     return masterVaultKey;
   } catch (error) {
-    console.error("VAULT UNLOCK ERROR:", error);
-
-    throw new Error("Invalid vault password");
+    if (error.code === "VAULT_CRYPTO_UNAVAILABLE") throw error;
+    const failure = new Error("Could not unlock your vault. Check your password and try again. If it is correct, your vault data may need recovery.");
+    failure.code = "VAULT_UNLOCK_FAILED";
+    throw failure;
   }
 };
 

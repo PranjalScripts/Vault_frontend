@@ -1,6 +1,6 @@
 import API, { forceRefresh } from "./client";
 
-export const googleLogin = (idToken) => API.post("/auth/google", { idToken });
+export const googleLogin = (idToken) => API.post("/auth/google", { idToken }, { timeout: 60000 });
 
 /** @param {{ page?: number, limit?: number, search?: string, sort?: string }} [options] */
 export const getSubjects = (options = {}) =>
@@ -131,7 +131,7 @@ export const resetVaultPassword = ({
     verifier,
   });
 
-export const getTrash = () => forceRefresh("/trash");
+export const getTrash = () => API.get("/trash");
 export const restoreTrash = (kind, id, subjectId) =>
   API.post(`/trash/${kind}/${id}/restore`, { subjectId });
 

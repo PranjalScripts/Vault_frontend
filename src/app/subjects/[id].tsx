@@ -1,4 +1,5 @@
 import { ShareSubjectModal, ShareSelection } from "@/components/subjects/ShareSubjectModal";
+import { recordStudyActivity, recordSubjectStudyVisit } from "@/notifications/reminders";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Linking,
@@ -48,7 +49,7 @@ import {
 } from "@/components/subjects/SubjectUI";
 
 export default function SubjectDetailScreen() {
-  const { id, section } = useLocalSearchParams<{ id: string; section?: string }>();
+  const { id, section, resumeTopicId } = useLocalSearchParams<{ id: string; section?: string; resumeTopicId?: string }>();
   const [showNotes, setShowNotes] = useState(section === "notes");
   useEffect(() => { setShowNotes(section === "notes"); }, [section, id]);
   const router = useRouter();
@@ -73,6 +74,18 @@ export default function SubjectDetailScreen() {
   const request = useRef(0);
   const loadedId = useRef(id);
   const [subject, setSubject] = useState<Subject | null>(null);
+  const resumed = useRef("");
+  useEffect(() => {
+    if (!resumeTopicId) { resumed.current = ""; return; }
+    if (!subject || subject._id !== id || resumed.current === `${id}:${resumeTopicId}`) return;
+    const topic = subject.topics?.find(item => item._id === resumeTopicId);
+    resumed.current = `${id}:${resumeTopicId}`;
+    if (topic) {
+      setResourceTopic(topic);
+      if (topicStatus(topic) !== "completed") recordStudyActivity(id, topic._id, subject.subjectName, topic.topic);
+    }
+    router.setParams({ resumeTopicId: "" });
+  }, [subject, id, resumeTopicId, router]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -96,6 +109,7 @@ export default function SubjectDetailScreen() {
       const response = await getSubject(id);
       if (sequence !== request.current) return;
       setSubject(response.data.data);
+      void recordSubjectStudyVisit(response.data.data);
     } catch {
       if (sequence === request.current)
         setError("This subject could not be loaded. Please try again.");
@@ -186,6 +200,7 @@ export default function SubjectDetailScreen() {
     try {
       const response = await updateTopic(id, topic._id, { status: next });
       setSubject(response.data.data);
+      if (next === "in_progress") recordStudyActivity(id, topic._id, subject?.subjectName, topic.topic);
       setTopicMenu(null);
     } catch {
       setError("Unable to update status. Please try again.");
@@ -237,6 +252,8 @@ export default function SubjectDetailScreen() {
   const openFile = async (file: SubjectFile) => {
     try {
       const target = normalizeUrl(file.fileUrl);
+      const topic = subject?.topics?.find(item => item.files?.some(attachment => file._id ? attachment._id === file._id : attachment.fileUrl === file.fileUrl));
+      if (topic && topicStatus(topic) !== "completed") recordStudyActivity(id, topic._id, subject?.subjectName, topic.topic);
       if (Platform.OS === "web")
         window.open(target, "_blank", "noopener,noreferrer");
       else await Linking.openURL(target);
@@ -249,6 +266,7 @@ export default function SubjectDetailScreen() {
   const openResource = (topic: Topic) => {
     try {
       const target = normalizeUrl(topic.url || "");
+      if (topicStatus(topic) !== "completed") recordStudyActivity(id, topic._id, subject?.subjectName, topic.topic);
       if (Platform.OS === "web")
         window.open(target, "_blank", "noopener,noreferrer");
       else
@@ -772,7 +790,7 @@ export default function SubjectDetailScreen() {
                         onEdit={() => openForm(item)}
                         onMenu={() => setTopicMenu(item)}
                         onStatus={() => setTopicMenu(item)}
-                        onResources={() => setResourceTopic(item)}
+                        onResources={() => { setResourceTopic(item); if (topicStatus(item) !== "completed") recordStudyActivity(id, item._id, subject?.subjectName, item.topic); }}
                       />
                     </View>
                   ))}

@@ -1,0 +1,121 @@
+diff --git a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
+index 610d303..1d22490 100644
+--- a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
++++ b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
+@@ -153,6 +153,7 @@ open class ExpoNotificationBuilder(
+     } else {
+       builder.setLargeIcon(largeIcon)
+     }
++    VaultNotificationLayout.apply(context, builder, notification.notificationRequest.identifier, content)
+     return builder.build()
+   }
+ 
+diff --git a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/VaultNotificationLayout.kt b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/VaultNotificationLayout.kt
+new file mode 100644
+index 0000000..4ad7e54
+--- /dev/null
++++ b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/VaultNotificationLayout.kt
+@@ -0,0 +1,41 @@
++package expo.modules.notifications.notifications.presentation.builders
++
++import android.content.Context
++import android.graphics.Color
++import android.widget.RemoteViews
++import androidx.core.app.NotificationCompat
++import expo.modules.notifications.R
++import expo.modules.notifications.notifications.interfaces.INotificationContent
++
++/** Custom content only: Expo retains native delivery, scheduling and response PendingIntents. */
++internal object VaultNotificationLayout {
++  fun apply(context: Context, builder: NotificationCompat.Builder, identifier: String, content: INotificationContent) {
++    if (!identifier.startsWith("vault-local-")) return
++    val kind = content.body?.optString("kind")
++    if (kind != "task" && kind != "study") return
++    val label = context.getString(if (kind == "study") R.string.vault_notification_study else R.string.vault_notification_task)
++    fun view(layout: Int) = RemoteViews(context.packageName, layout).apply {
++      setTextViewText(R.id.vault_notification_title, content.title)
++      setTextViewText(R.id.vault_notification_body, content.text)
++      setTextViewText(R.id.vault_notification_label, label)
++    }
++    builder
++      .setSmallIcon(R.drawable.vault_notification_icon)
++      .setColor(Color.rgb(42, 125, 103))
++      .setCategory(NotificationCompat.CATEGORY_REMINDER)
++      .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
++      .setAutoCancel(true)
++      .setOngoing(false)
++      .setStyle(NotificationCompat.DecoratedCustomViewStyle())
++      .setCustomContentView(view(R.layout.vault_notification_compact))
++      .setCustomHeadsUpContentView(view(R.layout.vault_notification_compact))
++      .setCustomBigContentView(view(R.layout.vault_notification_expanded))
++    // Android may show this redacted version when lock-screen content is hidden.
++    builder.setPublicVersion(NotificationCompat.Builder(context, builder.build().channelId)
++      .setSmallIcon(R.drawable.vault_notification_icon)
++      .setContentTitle(context.getString(R.string.vault_notification_app))
++      .setContentText(context.getString(R.string.vault_notification_private))
++      .setContentIntent(builder.build().contentIntent)
++      .build())
++  }
++}
+diff --git a/node_modules/expo-notifications/android/src/main/res/drawable/vault_notification_accent.xml b/node_modules/expo-notifications/android/src/main/res/drawable/vault_notification_accent.xml
+new file mode 100644
+index 0000000..cb06588
+--- /dev/null
++++ b/node_modules/expo-notifications/android/src/main/res/drawable/vault_notification_accent.xml
+@@ -0,0 +1 @@
++<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#2A7D67"/><corners android:radius="2dp"/></shape>
+\ No newline at end of file
+diff --git a/node_modules/expo-notifications/android/src/main/res/drawable/vault_notification_icon.xml b/node_modules/expo-notifications/android/src/main/res/drawable/vault_notification_icon.xml
+new file mode 100644
+index 0000000..a32a68a
+--- /dev/null
++++ b/node_modules/expo-notifications/android/src/main/res/drawable/vault_notification_icon.xml
+@@ -0,0 +1,4 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
++    <path android:fillColor="#FFFFFFFF" android:pathData="M4,3L20,3L20,21L4,21Z M7,6L7,18L17,18L17,6Z" android:fillType="evenOdd"/>
++    <path android:fillColor="#FFFFFFFF" android:pathData="M9,8L12,14L15,8L17,8L12,18L7,8Z"/>
++</vector>
+\ No newline at end of file
+diff --git a/node_modules/expo-notifications/android/src/main/res/layout/vault_notification_compact.xml b/node_modules/expo-notifications/android/src/main/res/layout/vault_notification_compact.xml
+new file mode 100644
+index 0000000..465acbd
+--- /dev/null
++++ b/node_modules/expo-notifications/android/src/main/res/layout/vault_notification_compact.xml
+@@ -0,0 +1,9 @@
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="2dp" android:paddingBottom="2dp">
++ <ImageView android:layout_width="3dp" android:layout_height="36dp" android:src="@drawable/vault_notification_accent" android:importantForAccessibility="no"/>
++ <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="12dp">
++  <TextView android:id="@+id/vault_notification_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:textAppearance="@style/TextAppearance.Compat.Notification.Info" android:textSize="9sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" android:visibility="gone"/>
++  <TextView android:id="@+id/vault_notification_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:textAppearance="@style/TextAppearance.Compat.Notification.Title" android:textSize="14sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
++  <TextView android:id="@+id/vault_notification_body" android:layout_width="match_parent" android:layout_height="wrap_content" android:textAppearance="@style/TextAppearance.Compat.Notification.Line2" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
++ </LinearLayout>
++ <ImageView android:id="@+id/vault_notification_logo" android:layout_width="36dp" android:layout_height="36dp" android:layout_marginStart="12dp" android:layout_gravity="center_vertical" android:src="@drawable/vault_notification_logo" android:scaleType="fitCenter" android:importantForAccessibility="no"/>
++</LinearLayout>
+diff --git a/node_modules/expo-notifications/android/src/main/res/layout/vault_notification_expanded.xml b/node_modules/expo-notifications/android/src/main/res/layout/vault_notification_expanded.xml
+new file mode 100644
+index 0000000..7022978
+--- /dev/null
++++ b/node_modules/expo-notifications/android/src/main/res/layout/vault_notification_expanded.xml
+@@ -0,0 +1,9 @@
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="2dp" android:paddingBottom="2dp">
++ <ImageView android:layout_width="3dp" android:layout_height="72dp" android:src="@drawable/vault_notification_accent" android:importantForAccessibility="no"/>
++ <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="12dp">
++  <TextView android:id="@+id/vault_notification_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:textAppearance="@style/TextAppearance.Compat.Notification.Info" android:textSize="9sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
++  <TextView android:id="@+id/vault_notification_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:textAppearance="@style/TextAppearance.Compat.Notification.Title" android:textSize="14sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
++  <TextView android:id="@+id/vault_notification_body" android:layout_width="match_parent" android:layout_height="wrap_content" android:textAppearance="@style/TextAppearance.Compat.Notification.Line2" android:textSize="12sp" android:maxLines="5" android:ellipsize="end"/>
++ </LinearLayout>
++ <ImageView android:id="@+id/vault_notification_logo" android:layout_width="56dp" android:layout_height="56dp" android:layout_marginStart="12dp" android:layout_gravity="center_vertical" android:src="@drawable/vault_notification_logo" android:scaleType="fitCenter" android:importantForAccessibility="no"/>
++</LinearLayout>
+diff --git a/node_modules/expo-notifications/android/src/main/res/values/vault_notifications.xml b/node_modules/expo-notifications/android/src/main/res/values/vault_notifications.xml
+new file mode 100644
+index 0000000..50597d4
+--- /dev/null
++++ b/node_modules/expo-notifications/android/src/main/res/values/vault_notifications.xml
+@@ -0,0 +1,6 @@
++<resources>
++<string name="vault_notification_app">Vault</string>
++<string name="vault_notification_task">TASK REMINDER</string>
++<string name="vault_notification_study">CONTINUE STUDYING</string>
++<string name="vault_notification_private">You have a reminder</string>
++</resources>
+\ No newline at end of file

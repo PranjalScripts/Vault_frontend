@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,7 +9,6 @@ import {
   Text,
   View,
 } from "react-native";
-import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
@@ -17,7 +16,6 @@ import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { googleLogin, saveAuthToken } from "@/api/api";
 import { useTheme } from "@/hooks/use-theme";
 
-WebBrowser.maybeCompleteAuthSession();
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -26,13 +24,15 @@ export default function OnboardingScreen() {
   const theme = useTheme();
 
   const [isLoading, setIsLoading] = React.useState(false);
+  const [loginError, setLoginError] = React.useState("");
+  const loginInProgress = useRef(false);
 
   /*
    * -------------------------------------------------------
    * WEB GOOGLE AUTH
    * -------------------------------------------------------
    */
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+  const [request, , promptAsync] = Google.useIdTokenAuthRequest({
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   });
@@ -58,11 +58,7 @@ export default function OnboardingScreen() {
       const user = result.data?.data?.user || result.data?.user;
 
       if (!token) {
-        Alert.alert(
-          "Sign-in failed",
-          "Server did not return an authentication token.",
-        );
-        return;
+        throw new Error("Server did not return an authentication token.");
       }
 
       await saveAuthToken(token, user);
@@ -70,56 +66,16 @@ export default function OnboardingScreen() {
       if (returnToShare) router.replace({ pathname: "/share", params: { token: returnToShare, add: "1" } });
       else router.replace("/dashboard");
     } catch (error: any) {
-      Alert.alert(
-        "Backend Error",
-        error?.response?.data?.message ||
-          error?.message ||
-          "Backend request failed.",
-      );
+      setLoginError(error?.response?.data?.message || error?.message || "Sign-in failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
   }, [router, returnToShare]);
 
-  /*
-   * -------------------------------------------------------
-   * WEB AUTH RESPONSE
-   * -------------------------------------------------------
-   */
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    if (!response) return;
-
-    if (response.type !== "success") {
-      setIsLoading(false);
-      return;
-    }
-
-    const idToken =
-      response.authentication?.idToken || response.params?.id_token;
-
-    if (!idToken) {
-      Alert.alert("Sign-in failed", "Google did not return an ID token.");
-      setIsLoading(false);
-      return;
-    }
-
-    handleBackendLogin(idToken);
-  }, [response, handleBackendLogin]);
-
-  /*
-   * -------------------------------------------------------
-   * SEND GOOGLE ID TOKEN TO BACKEND
-   * -------------------------------------------------------
-   */
-
-
-  /*
-   * -------------------------------------------------------
-   * GOOGLE LOGIN
-   * -------------------------------------------------------
-   */
   const handleGoogleLogin = async () => {
+    if (loginInProgress.current) return;
+    loginInProgress.current = true;
+    setLoginError("");
     setIsLoading(true);
 
     try {
@@ -194,7 +150,14 @@ export default function OnboardingScreen() {
          * Ask Google to show the account chooser instead of
          * silently reusing the previous Google account.
          */
-        await promptAsync();
+        const response = await promptAsync();
+        if (response.type === "success") {
+          const idToken = response.authentication?.idToken || response.params?.id_token;
+          if (!idToken) throw new Error("Google did not return an ID token.");
+          await handleBackendLogin(idToken);
+        } else if (response.type === "error") {
+          throw new Error(response.error?.message || "Google sign-in failed. Please try again.");
+        }
 
         return;
       }
@@ -203,10 +166,10 @@ export default function OnboardingScreen() {
 
       setIsLoading(false);
 
-      Alert.alert(
-        "Google Sign-in Failed",
-        error?.message || "Could not sign in with Google.",
-      );
+      setLoginError(error?.message || "Could not sign in with Google.");
+    } finally {
+      loginInProgress.current = false;
+      setIsLoading(false);
     }
   };
 
@@ -281,6 +244,8 @@ export default function OnboardingScreen() {
           Sign in or create your account with Google to open your personal
           library.
         </Text>
+
+        {loginError ? <Text accessibilityRole="alert" style={{ color: theme.text, marginBottom: 16 }}>{loginError}</Text> : null}
 
         <Pressable
           disabled={isLoading || (Platform.OS === "web" && !request)}

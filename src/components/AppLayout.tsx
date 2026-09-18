@@ -10,15 +10,15 @@ import {
   Modal,
   useWindowDimensions,
   ScrollView,
-  TextInput,
   Animated,
   Easing,
   Image,
+  Alert,
 } from "react-native";
 import { useRouter, usePathname, useFocusEffect } from "expo-router";
 import { useTheme } from "@/hooks/use-theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { logout, universalSearch, getAuthUser } from "@/api/api";
+import { logout, getAuthUser } from "@/api/api";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -29,7 +29,10 @@ export function AppLayout({
   title,
   subtitle,
   mobileTitle,
+  mobileSubtitle,
+  themeOverride,
   mobileHeaderActions,
+  mobileHeader,
   showMobileSearch = true,
   scrollable = true,
   contentBackgroundColor,
@@ -40,7 +43,10 @@ export function AppLayout({
   title?: string;
   subtitle?: string;
   mobileTitle?: string;
+  mobileSubtitle?: string;
+  themeOverride?: { [K in keyof ReturnType<typeof useTheme>]: string };
   mobileHeaderActions?: React.ReactNode;
+  mobileHeader?: React.ReactNode;
   showMobileSearch?: boolean;
   scrollable?: boolean;
   contentBackgroundColor?: string;
@@ -48,7 +54,8 @@ export function AppLayout({
   desktopBreadcrumb?: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
-  const theme = useTheme();
+  const baseTheme = useTheme();
+  const theme = themeOverride ?? baseTheme;
   const dark = useColorScheme() === "dark";
   const router = useRouter();
   const pathname = usePathname();
@@ -76,10 +83,6 @@ export function AppLayout({
   const insets = useSafeAreaInsets();
 
   const [mobileMenuVisible, setMobileMenuVisible] = React.useState(false);
-  const [searchOpen, setSearchOpen] = React.useState(false);
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [searchResults, setSearchResults] = React.useState<any[]>([]);
-  const [searchLoading, setSearchLoading] = React.useState(false);
   const [user, setUser] = React.useState<any>(null);
 
   // Animation for drawer slide-in from left
@@ -133,150 +136,9 @@ export function AppLayout({
     }
   }, [mobileMenuVisible, slideAnim, fadeAnim, width]);
 
-  React.useEffect(() => {
-    const term = searchQuery.trim();
-    if (term.length < 2) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const response = await universalSearch(
-          { q: term, kind: "all", page: 1, includePasscodes: true },
-          controller.signal,
-        );
-        setSearchResults(response.data?.data || []);
-      } catch {
-        if (!controller.signal.aborted) setSearchResults([]);
-      } finally {
-        if (!controller.signal.aborted) setSearchLoading(false);
-      }
-    }, 300);
-
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [searchQuery]);
-
-  const handleSearchPress = () => setSearchOpen((open) => !open);
-
-  const openSearchResult = (result: any) => {
-    setSearchOpen(false);
-    if (result.kind === "subject")
-      router.push({ pathname: "/subjects/[id]", params: { id: result.id } });
-    else if (result.kind === "topic")
-      router.push({
-        pathname: "/subjects/[id]/topic",
-        params: { id: result.subjectId, topicId: result.id },
-      });
-    else if (result.kind === "todo")
-      router.push({ pathname: "/todos", params: { itemId: result.id } });
-    else if (result.kind === "passcode")
-      router.push({ pathname: "/passcodes", params: { itemId: result.id } });
+  const handleSearchPress = () => {
+    if (pathname !== "/search") router.push("/search");
   };
-
-  const searchModal = (
-    <Modal
-      visible={searchOpen}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setSearchOpen(false)}
-    >
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "flex-start",
-          alignItems: "center",
-          paddingTop: 96,
-          paddingHorizontal: 20,
-          backgroundColor: "rgba(0, 0, 0, 0.35)",
-        }}
-      >
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 620,
-            maxHeight: "75%",
-            padding: 20,
-            borderRadius: 14,
-            backgroundColor: theme.backgroundElement,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Feather name="search" size={21} color={theme.textSecondary} />
-            <TextInput
-              autoFocus
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search everything..."
-              placeholderTextColor={theme.textSecondary}
-              accessibilityLabel="Global search"
-              returnKeyType="search"
-              style={{
-                flex: 1,
-                height: 44,
-                paddingHorizontal: 12,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 8,
-                color: theme.text,
-              }}
-            />
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Close search"
-              onPress={() => setSearchOpen(false)}
-            >
-              <Feather name="x" size={22} color={theme.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          {searchQuery.trim().length >= 2 && (
-            <View style={{ marginTop: 16 }}>
-              {searchLoading ? (
-                <Text style={{ padding: 10, color: theme.textSecondary }}>
-                  Searching...
-                </Text>
-              ) : searchResults.length ? (
-                searchResults.slice(0, 8).map((result) => (
-                  <TouchableOpacity
-                    key={`${result.kind}:${result.id}`}
-                    onPress={() => openSearchResult(result)}
-                    style={{
-                      padding: 12,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.border,
-                    }}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: theme.text, fontWeight: "600" }}
-                    >
-                      {result.title}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: theme.textSecondary, fontSize: 12 }}
-                    >
-                      {result.kind}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={{ padding: 10, color: theme.textSecondary }}>
-                  No matches found
-                </Text>
-              )}
-            </View>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
 
   /*
    * =========================================================
@@ -381,8 +243,7 @@ export function AppLayout({
       router.replace("/");
     } catch (error) {
       console.error("❌ Logout error:", error);
-
-      router.replace("/");
+      Alert.alert("Could not sign out", "Vault could not clear this phone’s local reminders. Please try signing out again.");
     }
   };
 
@@ -403,7 +264,6 @@ export function AppLayout({
           },
         ]}
       >
-        {searchModal}
         {/* =================================================
             SIDEBAR
             ================================================= */}
@@ -611,7 +471,7 @@ export function AppLayout({
                 accessibilityLabel="Search everything"
                 onPress={handleSearchPress}
               >
-                <Text style={styles.iconText}>🔍</Text>
+                <Feather name="search" size={21} color={theme.textSecondary} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
@@ -653,6 +513,7 @@ export function AppLayout({
           {scrollable ? (
             <ScrollView
               style={styles.desktopScroll}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={[
                 styles.desktopScrollContent,
                 {
@@ -782,8 +643,7 @@ export function AppLayout({
           },
         ]}
       >
-        {searchModal}
-        <View style={styles.mobileHeader}>
+        {mobileHeader || <View style={styles.mobileHeader}>
           {/* Menu */}
 
           <TouchableOpacity
@@ -809,18 +669,10 @@ export function AppLayout({
 
           {/* Header Title */}
 
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.mobileHeaderTitle,
-              { pointerEvents: "none" },
-              {
-                color: theme.text,
-              },
-            ]}
-          >
-            {mobileTitle || "Vault"}
-          </Text>
+          <View style={{ flex: 1, minWidth: 0, marginHorizontal: 8 }}>
+            <Text numberOfLines={1} style={[styles.mobileHeaderTitle, { marginHorizontal: 0, flex: 0, textAlign: mobileSubtitle ? 'left' : 'center', fontSize: mobileSubtitle ? 21 : 18, color: theme.text }]}>{mobileTitle || 'Vault'}</Text>
+            {mobileSubtitle && <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 3 }} numberOfLines={1}>{mobileSubtitle}</Text>}
+          </View>
 
           {/* Page actions / notification */}
 
@@ -843,7 +695,7 @@ export function AppLayout({
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </View>}
       </SafeAreaView>
 
       {/* =================================================
@@ -1080,6 +932,7 @@ export function AppLayout({
         {scrollable ? (
           <ScrollView
             style={styles.mobileScroll}
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             {/* Page Header */}
@@ -1184,7 +1037,7 @@ export function AppLayout({
         style={[
           styles.bottomNav,
           {
-            backgroundColor: dark ? theme.background : theme.backgroundElement,
+            backgroundColor: themeOverride ? theme.background : dark ? theme.background : theme.backgroundElement,
 
             borderTopColor: theme.border,
           },
@@ -1197,7 +1050,7 @@ export function AppLayout({
           return (
             <TouchableOpacity
               key={item.name}
-              style={styles.bottomNavItem}
+              style={[styles.bottomNavItem, isActive && { backgroundColor: theme.accentMuted, borderRadius: 28 }]}
               onPress={() => handleNav(item.path)}
               activeOpacity={0.7}
             >

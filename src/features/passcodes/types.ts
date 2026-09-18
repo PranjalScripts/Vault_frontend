@@ -10,6 +10,9 @@ export type Passcode = {
   username: string;
   password?: string;
   securityAnswer?: string;
+  createdAt?: string;
+  category?: string;
+  website?: string;
   updatedAt?: string;
   srNo?: number;
 };
@@ -20,6 +23,9 @@ export type RawPasscode = {
   username: string | EncryptedField;
   password?: string | EncryptedField;
   securityAnswer?: string | EncryptedField;
+  createdAt?: string;
+  category?: string;
+  website?: string;
   updatedAt?: string;
   srNo?: number;
 };

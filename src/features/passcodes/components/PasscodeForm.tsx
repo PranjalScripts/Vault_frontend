@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { PasscodeEditorShell } from "./PasscodeEditorShell";
 
@@ -20,17 +20,16 @@ export function PasscodeForm(props: any) {
     handleCreate,
   } = props;
 
-  const mobile = useWindowDimensions().width < 768;
   const content = (
     <>
           {showForm && (
             <View
               style={[
                 styles.formCard,
-                mobile && { marginBottom: 0, borderWidth: 0, borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
+                { marginBottom: 0, borderWidth: 0, borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
                 {
                   backgroundColor:
-                    mobile ? theme.background : theme.backgroundElement,
+                    theme.background,
 
                   borderColor:
                     theme.border,
@@ -39,7 +38,7 @@ export function PasscodeForm(props: any) {
             >
               <View
                 style={
-                  [styles.formHeader, mobile && { display: "none" }]
+                  [styles.formHeader, { display: "none" }]
                 }
               >
                 <View>
@@ -189,13 +188,11 @@ export function PasscodeForm(props: any) {
               >
                 {creating ? (
                   <ActivityIndicator
-                    color="#fff"
+                    color={theme.background}
                   />
                 ) : (
                   <Text
-                    style={
-                      styles.saveButtonText
-                    }
+                    style={[styles.saveButtonText, { color: theme.background }]}
                   >
                     Save Passcode
                   </Text>
@@ -205,5 +202,5 @@ export function PasscodeForm(props: any) {
           )}
     </>
   );
-  return mobile ? <PasscodeEditorShell visible={showForm} title="Save Passcode" onClose={() => { if (!creating) cancelCreate(); }}>{content}</PasscodeEditorShell> : content;
+  return <PasscodeEditorShell visible={showForm} title="Save Passcode" busy={creating} onClose={() => { if (!creating) cancelCreate(); }}>{content}</PasscodeEditorShell>;
 }

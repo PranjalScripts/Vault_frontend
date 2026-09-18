@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, Modal, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { PasscodeEditorShell } from "./PasscodeEditorShell";
 
@@ -22,28 +22,28 @@ export function PasscodeModals(props: any) {
     confirmDelete,
   } = props;
 
-  const mobile = useWindowDimensions().width < 768;
   return (
     <>
           <PasscodeEditorShell
             visible={!!editingPasscode}
             title="Edit Passcode"
+            busy={updating}
             onClose={() => { if (!updating) setEditingPasscode(null); }}
           >
               {editingPasscode && (
                 <View
                   style={[
                     styles.editModal,
-                    mobile && { width: "100%", maxWidth: "100%", borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
+                    { width: "100%", maxWidth: "100%", borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
                     {
                       backgroundColor:
-                        mobile ? theme.background : theme.backgroundElement,
+                        theme.background,
                     },
                   ]}
                 >
                   <View
                     style={
-                      [styles.modalTop, mobile && { display: "none" }]
+                      [styles.modalTop, { display: "none" }]
                     }
                   >
                     <View
@@ -90,7 +90,7 @@ export function PasscodeModals(props: any) {
                   <Text
                     style={[
                       styles.modalTitle,
-                      mobile && { display: "none" },
+                      { display: "none" },
                       {
                         color:
                           theme.text,
@@ -263,13 +263,11 @@ export function PasscodeModals(props: any) {
                     >
                       {updating ? (
                         <ActivityIndicator
-                          color="#fff"
+                          color={theme.background}
                         />
                       ) : (
                         <Text
-                          style={
-                            styles.modalUpdateText
-                          }
+                          style={[styles.modalUpdateText, { color: theme.background }]}
                         >
                           Save changes
                         </Text>
@@ -284,35 +282,20 @@ export function PasscodeModals(props: any) {
               DELETE MODAL
           ================================================= */}
 
-          <Modal
-            visible={
-              !!deleteConfirmId
-            }
-            transparent
-            animationType="none"
-            onRequestClose={() =>
-              setDeleteConfirmId(
-                null
-              )
-            }
-          >
-            <View
-              style={
-                styles.modalOverlay
-              }
-            >
+          <PasscodeEditorShell visible={!!deleteConfirmId} title="Delete Passcode" busy={deleting} onClose={() => { if (!deleting) setDeleteConfirmId(null); }}>
               <View
                 style={[
                   styles.deleteModal,
+                  { width: "100%", maxWidth: "100%", borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
                   {
                     backgroundColor:
-                      theme.backgroundElement,
+                      theme.background,
                   },
                 ]}
               >
                 <View
                   style={
-                    styles.deleteModalTop
+                    [styles.deleteModalTop, { display: "none" }]
                   }
                 >
                   <View
@@ -476,7 +459,7 @@ export function PasscodeModals(props: any) {
                   >
                     {deleting ? (
                       <ActivityIndicator
-                        color="#fff"
+                        color={theme.background}
                       />
                     ) : (
                       <Text
@@ -490,8 +473,7 @@ export function PasscodeModals(props: any) {
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
-          </Modal>
+          </PasscodeEditorShell>
     </>
   );
 }

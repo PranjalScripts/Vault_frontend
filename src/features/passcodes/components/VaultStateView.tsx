@@ -53,7 +53,7 @@ function VaultPrompt({ theme, icon, title, text, buttonLabel, onPress }: any) {
       <Text style={[styles.emptyTitle, { color: theme.text }]}>{title}</Text>
       <Text style={[styles.emptyText, { color: theme.textSecondary }]}>{text}</Text>
       <TouchableOpacity style={[styles.unlockButton, { backgroundColor: theme.accent }]} onPress={onPress} activeOpacity={0.8}>
-        <Text style={styles.unlockButtonText}>{buttonLabel}</Text>
+        <Text style={[styles.unlockButtonText, { color: theme.background }]}>{buttonLabel}</Text>
       </TouchableOpacity>
     </View>
   );

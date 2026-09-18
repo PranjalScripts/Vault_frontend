@@ -1,13 +1,13 @@
 import React from "react";
 import {
   ActivityIndicator,
-  Modal,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
+import { PasscodeEditorShell } from "./PasscodeEditorShell";
 import { styles } from "@/features/passcodes/styles";
 
 export function VaultModal(props: any) {
@@ -34,22 +34,17 @@ export function VaultModal(props: any) {
   } = props;
 
   return (
-    <Modal
-      visible={showVaultModal}
-      transparent
-      animationType="none"
-      onRequestClose={closeVaultModal}
-    >
-      <View style={styles.modalOverlay}>
+    <PasscodeEditorShell visible={showVaultModal} title={isVaultCreated ? 'Unlock Vault' : 'Create Vault'} onClose={closeVaultModal} busy={unlocking || creatingVault}>
         <View
           style={[
             styles.unlockModal,
+            { width: "100%", maxWidth: "100%", borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
             {
-              backgroundColor: theme.backgroundElement,
+              backgroundColor: theme.background,
             },
           ]}
         >
-          <View style={styles.modalTop}>
+          <View style={[styles.modalTop, { display: "none" }]}>
             <View style={styles.unlockIconCircle}>
               <Text style={styles.unlockModalIcon}>
                 {isVaultCreated ? "🔐" : "🛡️"}
@@ -219,6 +214,8 @@ export function VaultModal(props: any) {
 
           {vaultError ? (
             <Text
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
               style={[
                 styles.unlockError,
                 {
@@ -268,9 +265,9 @@ export function VaultModal(props: any) {
               activeOpacity={0.8}
             >
               {unlocking || creatingVault ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={theme.background} />
               ) : (
-                <Text style={styles.modalUpdateText}>
+                <Text style={[styles.modalUpdateText, { color: theme.background }]}>
                   {isVaultCreated ? "Unlock Vault" : "Create Vault"}
                 </Text>
               )}
@@ -297,7 +294,6 @@ export function VaultModal(props: any) {
             </TouchableOpacity>
           )}
         </View>
-      </View>
-    </Modal>
+    </PasscodeEditorShell>
   );
 }

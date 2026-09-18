@@ -47,6 +47,7 @@ const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
   // ===================================================
 
   const handleUnlockVault = async () => {
+    if (loading) return;
     // -----------------------------------------------
     // VALIDATION
     // -----------------------------------------------
@@ -107,8 +108,6 @@ const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
         "The vault password you entered is incorrect.",
       );
     } catch (error: any) {
-      console.error("❌ VAULT UNLOCK ERROR:", error);
-
       Alert.alert(
         "Unable to Unlock Vault",
         error?.message || "Unable to unlock your vault. Please try again.",

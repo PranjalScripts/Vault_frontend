@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -19,8 +20,9 @@ import {
 import {
   rewrapVaultCredentials,
   createVaultCredentials,
-  unlockVault as unlockVaultCrypto,
 } from "../crypto/vaultCrypto";
+
+import { unlockStoredVault } from "../crypto/unlockStoredVault";
 
 // =========================================================
 // TYPES
@@ -64,10 +66,28 @@ const VAULT_SESSION_KEY = "vault_master_key_session_v2";
 const VAULT_LAST_ACTIVE_KEY = "vault_session_active";
 const VAULT_LOCK_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
+// Session persistence is optional; blocked/full browser storage must not turn a
+// successful decrypt into an apparent incorrect-password failure.
+function saveVaultSession(key: string | null) {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    if (key) {
+      sessionStorage.setItem(VAULT_SESSION_KEY, key);
+      sessionStorage.setItem(VAULT_LAST_ACTIVE_KEY, Date.now().toString());
+    } else {
+      sessionStorage.removeItem(VAULT_SESSION_KEY);
+      sessionStorage.removeItem(VAULT_LAST_ACTIVE_KEY);
+    }
+  } catch { /* Keep the vault session in memory only. */ }
+}
+
 export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
   // =======================================================
   // STATE
   // =======================================================
+
+  const unlockPending = useRef<Promise<boolean> | null>(null);
+  const vaultGeneration = useRef(0);
 
   const [status, setStatus] = useState<VaultStatus>("loading");
 
@@ -85,6 +105,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
   // =======================================================
 
   const refreshVault = useCallback(async () => {
+    const generation = ++vaultGeneration.current;
     try {
       setStatus("loading");
 
@@ -94,6 +115,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
        */
 
       const response = await getVault();
+      if (generation !== vaultGeneration.current) return;
 
       /*
        * Vault exists.
@@ -149,6 +171,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
 
       setStatus("setup");
     } catch (error: any) {
+      if (generation !== vaultGeneration.current) return;
       /*
        * 404 is expected for a new user.
        */
@@ -188,6 +211,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let mounted = true;
+    const invalidatePendingUnlock = () => { ++vaultGeneration.current; };
 
     const loadVaultIfAuthenticated = async (authenticated: boolean) => {
       if (!authenticated || !mounted) {
@@ -199,6 +223,11 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
 
     const unsubscribe = subscribeToAuthChanges((authenticated: boolean) => {
       if (!authenticated) {
+        ++vaultGeneration.current;
+        saveVaultSession(null);
+        setVaultSalt(null);
+        setPasswordWrappedVaultKey(null);
+        setVaultVerifier(null);
         setVaultKey(null);
         setStatus("loading");
         return;
@@ -213,6 +242,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       mounted = false;
+      invalidatePendingUnlock();
       unsubscribe();
     };
   }, [refreshVault]);
@@ -367,92 +397,44 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
   // =======================================================
 
   const unlockVault = useCallback(
-    async (vaultPassword: string): Promise<boolean> => {
-      if (!vaultSalt) {
-        console.error("❌ Vault salt is missing");
-
-        return false;
-      }
-
-      if (!passwordWrappedVaultKey) {
-        console.error("❌ Password wrapped vault key is missing");
-
-        return false;
-      }
-
-      if (!vaultVerifier) {
-        console.error("❌ Vault verifier is missing");
-
-        return false;
-      }
-
-      if (!vaultPassword) {
-        return false;
-      }
-
-      try {
-        /*
-         * vaultCrypto handles:
-         *
-         * password
-         *    ↓
-         * PBKDF2
-         *    ↓
-         * Vault Key
-         *    ↓
-         * decrypt verifier
-         *    ↓
-         * validate
-         */
-
-        const derivedVaultKey = await unlockVaultCrypto(
-          vaultPassword,
-          vaultSalt,
-          passwordWrappedVaultKey,
-          vaultVerifier,
-        );
-
-        console.log("UNLOCKED MASTER KEY LENGTH:", derivedVaultKey?.length);
-
-        /*
-         * Correct password.
-         *
-         * Store Vault Key only in memory.
-         */
-
-        setVaultKey(derivedVaultKey);
-
-        if (typeof sessionStorage !== "undefined") {
-          sessionStorage.setItem(VAULT_SESSION_KEY, derivedVaultKey);
-          sessionStorage.setItem(VAULT_LAST_ACTIVE_KEY, Date.now().toString());
+    (vaultPassword: string): Promise<boolean> => {
+      if (unlockPending.current) return unlockPending.current;
+      if (!vaultPassword) return Promise.resolve(false);
+      const generation = vaultGeneration.current;
+      const run = async () => {
+        try {
+          const { key, credentials } = await unlockStoredVault(vaultPassword, {
+            passwordSalt: vaultSalt, passwordWrappedVaultKey, verifier: vaultVerifier,
+          }, getFreshVault);
+          if (generation !== vaultGeneration.current) {
+            throw new Error('Your vault session changed. Please try unlocking again.');
+          }
+          setVaultSalt(credentials.passwordSalt);
+          setPasswordWrappedVaultKey(credentials.passwordWrappedVaultKey);
+          setVaultVerifier(credentials.verifier);
+          setVaultKey(key);
+          saveVaultSession(key);
+          setStatus('unlocked');
+          return true;
+        } catch (error) {
+          if (generation === vaultGeneration.current) {
+            setVaultKey(null);
+            setStatus('locked');
+            saveVaultSession(null);
+          }
+          throw error;
+        } finally {
+          unlockPending.current = null;
         }
-
-        setStatus("unlocked");
-
-        console.log("🔓 Vault unlocked");
-
-        return true;
-      } catch {
-        /*
-         * Wrong password or
-         * invalid verifier.
-         */
-
-        console.log("❌ Invalid vault password");
-
-        setVaultKey(null);
-        if (typeof sessionStorage !== "undefined") {
-          sessionStorage.removeItem(VAULT_SESSION_KEY);
-          sessionStorage.removeItem(VAULT_LAST_ACTIVE_KEY);
-        }
-
-        return false;
-      }
+      };
+      unlockPending.current = run();
+      return unlockPending.current;
     },
     [passwordWrappedVaultKey, vaultSalt, vaultVerifier],
   );
 
   const completeVaultRecovery = useCallback((masterVaultKey: string) => {
+    ++vaultGeneration.current;
     if (!masterVaultKey) {
       return;
     }
@@ -480,6 +462,7 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
   // =======================================================
 
   const lockVault = useCallback(() => {
+    ++vaultGeneration.current;
     console.log("🔒 Vault locked");
 
     /*
@@ -500,9 +483,11 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
   }, [vaultSalt]);
 
   const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    ++vaultGeneration.current;
     const response = await getFreshVault();
     const credentials = await rewrapVaultCredentials(currentPassword, newPassword, response.data.data);
     await changeVaultPasswordApi(credentials);
+    ++vaultGeneration.current;
     setVaultSalt(credentials.passwordSalt);
     setPasswordWrappedVaultKey(credentials.passwordWrappedVaultKey);
     setVaultVerifier(credentials.verifier);

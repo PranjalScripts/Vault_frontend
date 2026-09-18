@@ -1,123 +1,55 @@
-import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
-import Toast from "react-native-toast-message";
+import { useTheme } from '@/hooks/use-theme';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
+import { BrandLogo } from '@/components/BrandLogo';
+import type { Passcode } from '../types';
+import { categoryColors, entryCategory } from '../presentation';
 
-import { BrandLogo } from "@/components/BrandLogo";
-
-import type { Passcode } from "@/features/passcodes/types";
-import { formatTimeAgo } from "@/features/passcodes/utils/passcodeCrypto";
-
-type PasscodeCardProps = {
-  item: Passcode;
-  index: number;
-  theme: any;
-  styles: any;
-  isRevealed: boolean;
-  copiedField: string | null;
-  onDelete: (id: string) => void;
-  onEdit: (item: Passcode) => void;
-  onToggleReveal: (id: string) => void;
-  onCopy: (value: string, fieldId: string, fieldName: string) => void;
+type Props = {
+  item: Passcode; isRevealed: boolean; copiedField: string | null;
+  onOpen: (item: Passcode) => void; onDelete: (id: string) => void; onEdit: (item: Passcode) => void;
+  onToggleReveal: (id: string) => void; onCopy: (value: string, id: string, label: string) => void;
 };
-
-export function PasscodeCard({
-  item,
-  index,
-  theme,
-  styles,
-  isRevealed,
-  copiedField,
-  onDelete,
-  onEdit,
-  onToggleReveal,
-  onCopy,
-}: PasscodeCardProps) {
-  const usernameCopied = copiedField === `${item._id}-username`;
-  const passwordCopied = copiedField === `${item._id}-password`;
-
-  return (
-    <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-      <View style={styles.cardHeader}>
-        <View style={styles.platformSection}>
-          <View style={[styles.platformIconContainer, { backgroundColor: theme.background }]}>
-            <BrandLogo name={item.platform} kind="platform" size={40} />
-          </View>
-          <View style={styles.platformInfo}>
-            <Text style={[styles.platform, { color: theme.text }]} numberOfLines={1}>
-              {item.platform}
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={[styles.deleteButton, { borderColor: theme.border }]}
-          onPress={() => onDelete(item._id)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.deleteIcon}>🗑</Text>
-          <Text style={[styles.deleteButtonText, { color: theme.danger }]}>Delete</Text>
-        </TouchableOpacity>
+export function PasscodeCard({ item, isRevealed, copiedField, onOpen, onDelete, onEdit, onToggleReveal, onCopy }: Props) {
+  const p = useTheme();
+  const s = createStyles(p);
+  const [menu, setMenu] = useState(false);
+  const category = entryCategory(item);
+  return <View style={s.card}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.platform} details`} onPress={() => onOpen(item)} style={s.identity}>
+      <BrandLogo name={item.platform} kind="platform" size={46} />
+      <View style={s.copy}><Text numberOfLines={1} style={s.name}>{item.platform}</Text>
+        <View style={s.line}><Feather name="user" size={12} color={p.textSecondary} /><Text numberOfLines={1} style={s.username}>{item.username}</Text></View>
+        <View style={s.line}><Feather name="lock" size={12} color={p.textSecondary} /><Text numberOfLines={1} style={s.password}>{isRevealed ? item.password : '••••••••'}</Text></View>
       </View>
-
-      <CredentialRow
-        label="Username"
-        value={item.username}
-        theme={theme}
-        styles={styles}
-        actions={
-          <>
-            <TouchableOpacity style={[styles.smallAction, { borderColor: theme.border }]} onPress={() => onEdit(item)} activeOpacity={0.7}>
-              <Text style={styles.smallActionIcon}>✏️</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.smallAction, { borderColor: theme.border }]} onPress={() => onCopy(item.username, `${item._id}-username`, "Username")} activeOpacity={0.7}>
-              <Text style={styles.smallActionIcon}>{usernameCopied ? "✓" : "📋"}</Text>
-            </TouchableOpacity>
-          </>
-        }
-      />
-
-      <CredentialRow
-        label="Password"
-        value={isRevealed ? item.password || "" : "••••••••"}
-        theme={theme}
-        styles={styles}
-        actions={
-          <>
-            <TouchableOpacity style={[styles.smallAction, { borderColor: theme.border }]} onPress={() => onToggleReveal(item._id)} activeOpacity={0.7}>
-              <Text style={[styles.showActionText, { color: theme.accent }]}>{isRevealed ? "Hide" : "Show"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.smallAction, { borderColor: theme.border }]}
-              onPress={() => {
-                if (!item.password) {
-                  Toast.show({ type: "info", text1: "No password", text2: "This passcode has no password stored." });
-                  return;
-                }
-                onCopy(item.password, `${item._id}-password`, "Password");
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.smallActionIcon}>{passwordCopied ? "✓" : "📋"}</Text>
-            </TouchableOpacity>
-          </>
-        }
-      />
-
-      <View style={[styles.cardFooter, { borderTopColor: theme.border }]}>
-        <Text style={[styles.serialText, { color: theme.textSecondary }]}>#{item.srNo ?? index + 1}</Text>
-        {item.updatedAt && <Text style={[styles.updatedText, { color: theme.textSecondary }]}>{formatTimeAgo(item.updatedAt)}</Text>}
+    </Pressable>
+    <View style={s.actions}>
+      <View style={s.top}><View style={s.badge}><View style={[s.dot, { backgroundColor: categoryColors[category] }]} /><Text style={s.category}>{category}</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Actions for ${item.platform}`} accessibilityState={{ expanded: menu }} onPress={() => setMenu(value => !value)} style={s.more}><Feather name="more-vertical" size={18} color={p.textSecondary} /></Pressable>
+      </View>
+      <View style={s.bottom}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Copy ${item.platform} password`} disabled={!item.password} onPress={() => onCopy(item.password || '', `${item._id}-password`, 'Password')} style={s.copyButton}><Feather name={copiedField === `${item._id}-password` ? 'check' : 'copy'} size={17} color={p.text} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${isRevealed ? 'Hide' : 'Show'} ${item.platform} password`} onPress={() => onToggleReveal(item._id)} style={s.show}><Feather name={isRevealed ? 'eye-off' : 'eye'} size={17} color={p.link} /><Text style={s.showText}>{isRevealed ? 'Hide' : 'Show'}</Text></Pressable>
       </View>
     </View>
-  );
+    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${item.platform}`} onPress={() => onOpen(item)} style={s.chevron}><Feather name="chevron-right" size={19} color={p.textSecondary} /></Pressable>
+    {menu && <View style={s.menu}>
+      <Pressable accessibilityRole="button" onPress={() => { setMenu(false); onEdit(item); }} style={s.menuItem}><Feather name="edit-2" size={16} color={p.accent} /><Text style={s.showText}>Edit</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => { setMenu(false); onDelete(item._id); }} style={s.menuItem}><Feather name="trash-2" size={16} color={p.danger} /><Text style={{ color: p.danger }}>Delete</Text></Pressable>
+    </View>}
+  </View>;
 }
-
-function CredentialRow({ label, value, actions, theme, styles }: any) {
-  return (
-    <View style={[styles.credentialRow, { borderTopColor: theme.border }]}>
-      <View style={styles.credentialInfo}>
-        <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>
-        <Text style={[styles.value, { color: theme.text }]} numberOfLines={1}>{value}</Text>
-      </View>
-      <View style={styles.credentialActions}>{actions}</View>
-    </View>
-  );
-}
+const createStyles = (p: ReturnType<typeof useTheme>) => StyleSheet.create({
+  card: { width: '100%', minHeight: 82, padding: 12, borderWidth: 1, borderColor: p.border, borderRadius: 16, backgroundColor: p.backgroundElement, flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap' },
+  identity: { flex: 1, minWidth: 125, flexDirection: 'row', alignItems: 'center', gap: 16 },
+  copy: { flex: 1, minWidth: 0 }, name: { color: p.text, fontWeight: '600', fontSize: 15, marginBottom: 7 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 3 }, username: { color: p.textSecondary, fontSize: 12, flex: 1 }, password: { color: p.text, fontSize: 14, letterSpacing: 2, flex: 1 },
+  actions: { gap: 8 }, top: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 7 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 20, backgroundColor: p.backgroundSelected, paddingHorizontal: 9, paddingVertical: 5 }, dot: { width: 8, height: 8, borderRadius: 4 }, category: { color: p.textSecondary, fontSize: 10 },
+  more: { width: 26, minHeight: 28, alignItems: 'center', justifyContent: 'center' }, bottom: { flexDirection: 'row', gap: 9 },
+  copyButton: { minWidth: 36, minHeight: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: p.backgroundSelected, borderWidth: 1, borderColor: p.border },
+  show: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 30, paddingHorizontal: 10, borderRadius: 10, backgroundColor: p.accentMuted, borderWidth: 1, borderColor: p.border }, showText: { color: p.link, fontSize: 12 },
+  chevron: { width: 18, minHeight: 44, justifyContent: 'center' },
+  menu: { width: '100%', flexDirection: 'row', justifyContent: 'flex-end', gap: 12, borderTopWidth: 1, borderTopColor: p.border, paddingTop: 8 }, menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 },
+});

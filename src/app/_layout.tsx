@@ -1,4 +1,6 @@
 import { VaultProvider } from "@/contexts/vaultContext";
+import NoDataConnection from "@/components/NoDataConnection";
+import NotificationObserver from "@/components/NotificationObserver";
 import {
   DarkTheme,
   DefaultTheme,
@@ -6,6 +8,8 @@ import {
 } from "@react-navigation/native";
 
 import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+
+import * as WebBrowser from "expo-web-browser";
 
 import * as ExpoSplashScreen from "expo-splash-screen";
 
@@ -23,7 +27,14 @@ import { useTheme } from "@/hooks/use-theme";
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
 import { useThemePreferenceReady } from "@/state/theme-preference";
-const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp"];
+const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search"];
+
+// Google redirects to the origin on web, so completion must run on every route.
+// Expo validates the stored redirect URL; AuthSession validates OAuth state.
+const completingWebAuth = Platform.OS === "web" && typeof window !== "undefined"
+  && /(?:[#?&])state=/.test(window.location.href)
+  && /(?:[#?&])(?:id_token|code|error)=/.test(window.location.href)
+  && WebBrowser.maybeCompleteAuthSession().type === "success";
 
 // Hold the single native splash before React mounts. Never replace it with a JS logo.
 if (Platform.OS !== "web") {
@@ -50,7 +61,7 @@ export default function RootLayout() {
   const segments = useSegments();
   const navigationState = useRootNavigationState();
   const [rootLaidOut, setRootLaidOut] = useState(false);
-  const [startupComplete, setStartupComplete] = useState(Platform.OS === "web");
+  const [startupComplete, setStartupComplete] = useState(false);
 
   const [isReady, setIsReady] = useState(false);
 
@@ -77,54 +88,22 @@ export default function RootLayout() {
 
   useEffect(() => {
     let mounted = true;
-
-    const initAuth = async () => {
-      try {
-        const token = await getAuthToken();
-
-        if (!mounted) {
-          return;
-        }
-
-        console.log("🔐 INITIAL AUTH CHECK");
-
-        console.log("Token exists:", !!token);
-
+    let authChanged = false;
+    const unsubscribe = subscribeToAuthChanges((authenticated: boolean) => {
+      authChanged = true;
+      setIsAuthenticated(authenticated);
+      setIsReady(true);
+    });
+    getAuthToken().then((token) => {
+      if (mounted && !authChanged) {
         setIsAuthenticated(!!token);
-      } catch (error) {
-        console.error("❌ Auth initialization failed:", error);
-
-        if (mounted) {
-          setIsAuthenticated(false);
-        }
-      } finally {
-        if (mounted) {
-          setIsReady(true);
-        }
+        setIsReady(true);
       }
-    };
-
-    initAuth();
-
+    });
     return () => {
       mounted = false;
+      unsubscribe();
     };
-  }, []);
-
-  /*
-   * =========================================================
-   * LISTEN FOR LOGIN / LOGOUT
-   * =========================================================
-   */
-
-  useEffect(() => {
-    const unsubscribe = subscribeToAuthChanges((authenticated: boolean) => {
-      console.log("🔄 AUTH STATE CHANGED:", authenticated);
-
-      setIsAuthenticated(authenticated);
-    });
-
-    return unsubscribe;
   }, []);
 
   /*
@@ -143,7 +122,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     // The Stack must be mounted before dispatching the existing auth redirects.
-    if (isReady && navigationState?.key && redirectTarget) {
+    if (!completingWebAuth && isReady && navigationState?.key && redirectTarget) {
       router.replace(redirectTarget);
     }
   }, [isReady, navigationState?.key, redirectTarget, router]);
@@ -157,7 +136,7 @@ export default function RootLayout() {
     const firstFrame = requestAnimationFrame(() => {
       secondFrame = requestAnimationFrame(() => {
         if (cancelled) return;
-        ExpoSplashScreen.hideAsync()
+        (Platform.OS === "web" ? Promise.resolve() : ExpoSplashScreen.hideAsync())
           .then(() => { if (!cancelled) setStartupComplete(true); })
           .catch(console.warn);
       });
@@ -221,13 +200,16 @@ export default function RootLayout() {
 
   // Keep server HTML and the first hydration render empty until storage is read.
   // On native, the existing launch screen stays visible during this step.
-  if (!themeReady) return null;
+  if (!themeReady || completingWebAuth) return null;
+
+  const routeReady = isReady && !redirectTarget;
 
   return (
     <ThemeProvider value={navigationTheme}>
       <VaultProvider>
         <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         <View style={{ flex: 1, backgroundColor: theme.background }} onLayout={() => setRootLaidOut(true)}>
+        <View style={{ flex: 1, opacity: routeReady ? 1 : 0 }} pointerEvents={routeReady ? "auto" : "none"}>
         <Stack
           screenOptions={{
             // Do not animate the initial redirect behind the launch screen.
@@ -344,8 +326,11 @@ export default function RootLayout() {
           />
         </Stack>
         </View>
+        </View>
 
         <Toast />
+        <NotificationObserver ready={isReady && isAuthenticated && startupComplete && !!navigationState?.key && !redirectTarget} />
+        <NoDataConnection />
       </VaultProvider>
     </ThemeProvider>
   );

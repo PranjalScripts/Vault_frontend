@@ -1,17 +1,12 @@
-import { shadow } from "@/styles/shadow";
 import React, { useState, useEffect, useRef } from "react";
 
 import {
   ActivityIndicator,
-  Modal,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from "react-native";
 
 import {
@@ -26,13 +21,14 @@ import {
   deriveVaultKey,
   encryptWithVaultKey,
 } from "../crypto/vaultCrypto";
-import { useTheme } from "../hooks/use-theme";
+import { useTheme } from "@/hooks/use-theme";
+import { PasscodeEditorShell } from "@/features/passcodes/components/PasscodeEditorShell";
 
 // =====================================================
 // TYPES
 // =====================================================
 
-type RecoveryStep = "confirm" | "otp" | "password" | "success";
+type RecoveryStep = "confirm" | "otp" | "password";
 
 interface ForgotVaultPasswordModalProps {
   visible: boolean;
@@ -124,8 +120,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
 
       setStep("otp");
     } catch (err: any) {
-      console.error("❌ Failed to send OTP:", err);
-
       setError(
         err?.response?.data?.message || err.message || "Failed to send OTP",
       );
@@ -178,8 +172,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
 
       setOtp("");
     } catch (err: any) {
-      console.error("❌ Failed to verify OTP:", err);
-
       setError(
         err?.response?.data?.message || err.message || "Invalid or expired OTP",
       );
@@ -301,16 +293,10 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
       // Option: Automatically unlock with new password
       // Or just close modal and ask user to unlock again
 
-      setStep("success");
-
-      setTimeout(() => {
-        handleClose();
-
-        onSuccess?.(masterKey);
-      }, 2000);
+      resetRecovery();
+      onClose?.();
+      onSuccess?.(masterKey);
     } catch (err: any) {
-      console.error("❌ Failed to reset vault password:", err);
-
       setError(
         err?.response?.data?.message ||
           err.message ||
@@ -341,8 +327,6 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
 
       setResendCountdown(OTP_RESEND_COOLDOWN);
     } catch (err: any) {
-      console.error("❌ Failed to resend OTP:", err);
-
       setError(
         err?.response?.data?.message || err.message || "Failed to resend OTP",
       );
@@ -355,11 +339,7 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
   // CLOSE MODAL
   // =======================================================
 
-  const handleClose = () => {
-    if (loading) {
-      return;
-    }
-
+  const resetRecovery = () => {
     setStep("confirm");
 
     setError(null);
@@ -380,6 +360,11 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
     setRecoveryToken(null);
 
 
+  };
+
+  const handleClose = () => {
+    if (loading) return;
+    resetRecovery();
     onClose?.();
   };
 
@@ -388,24 +373,11 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
   // =======================================================
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.overlay}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContainer}
-          keyboardShouldPersistTaps="handled"
-        >
+    <PasscodeEditorShell visible={visible} title={step === 'otp' ? 'Verify OTP' : step === 'password' ? 'Reset Vault Password' : 'Recover Vault'} onClose={handleClose} busy={loading}>
           <View
             style={[
               styles.container,
-              { backgroundColor: theme.backgroundElement },
+              { backgroundColor: theme.background },
             ]}
           >
             {/* =========================================
@@ -460,9 +432,9 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
                   disabled={loading}
                 >
                   {loading ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
+                    <ActivityIndicator size="small" color={theme.background} />
                   ) : (
-                    <Text style={styles.buttonText}>Send OTP</Text>
+                    <Text style={[styles.buttonText, { color: theme.background }]}>Send OTP</Text>
                   )}
                 </TouchableOpacity>
 
@@ -561,9 +533,9 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
                   disabled={loading || otp.length !== OTP_LENGTH}
                 >
                   {loading ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
+                    <ActivityIndicator size="small" color={theme.background} />
                   ) : (
-                    <Text style={styles.buttonText}>Verify OTP</Text>
+                    <Text style={[styles.buttonText, { color: theme.background }]}>Verify OTP</Text>
                   )}
                 </TouchableOpacity>
 
@@ -713,9 +685,9 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
                   disabled={loading}
                 >
                   {loading ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
+                    <ActivityIndicator size="small" color={theme.background} />
                   ) : (
-                    <Text style={styles.buttonText}>Reset Vault Password</Text>
+                    <Text style={[styles.buttonText, { color: theme.background }]}>Reset Vault Password</Text>
                   )}
                 </TouchableOpacity>
 
@@ -732,47 +704,9 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
               </>
             )}
 
-            {/* =========================================
-                STEP 4: SUCCESS
-            ========================================= */}
 
-            {step === "success" && (
-              <>
-                <View style={styles.header}>
-                  <Text style={styles.icon}>✅</Text>
-
-                  <Text style={[styles.title, { color: theme.text }]}>
-                    Vault Password Updated
-                  </Text>
-
-                  <Text
-                    style={[styles.subtitle, { color: theme.textSecondary }]}
-                  >
-                    Your Vault password has been reset successfully.
-                  </Text>
-
-                  <Text
-                    style={[styles.subtitle, { color: theme.textSecondary }]}
-                  >
-                    Your existing encrypted data remains unchanged.
-                  </Text>
-                </View>
-
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={theme.accent} />
-
-                  <Text
-                    style={[styles.loadingText, { color: theme.textSecondary }]}
-                  >
-                    Redirecting...
-                  </Text>
-                </View>
-              </>
-            )}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+    </PasscodeEditorShell>
   );
 };
 
@@ -783,27 +717,7 @@ export default ForgotVaultPasswordModal;
 // =====================================================
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.35)",
-  },
-
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 20,
-  },
-
-  container: {
-    width: "100%",
-    maxWidth: 440,
-    borderRadius: 20,
-    padding: 20,
-    marginHorizontal: 20,
-    ...shadow({ opacity: 0.18, radius: 25, x: 0, y: 10 }),
-    elevation: 15,
-  },
+  container: { width: '100%', paddingTop: 20 },
 
   header: {
     alignItems: "center",

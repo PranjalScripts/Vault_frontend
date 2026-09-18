@@ -1,3 +1,5 @@
+import { useTheme } from "@/hooks/use-theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import React, {
   useCallback,
   useEffect,
@@ -6,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { Pressable, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import Feather from "@expo/vector-icons/Feather";
 import Toast from "react-native-toast-message";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -20,7 +23,8 @@ import {
   deletePasscode,
 } from "@/api/api";
 
-import { useTheme } from "@/hooks/use-theme";
+import { entryCategory, type Category } from "@/features/passcodes/presentation";
+import { PasscodeDetails } from "@/features/passcodes/components/PasscodeDetails";
 
 import { useVault } from "@/contexts/vaultContext";
 
@@ -47,6 +51,9 @@ const DEFAULT_PAGE_SIZE = 20;
 
 export default function PasscodesScreen() {
   const theme = useTheme();
+  const dark = useColorScheme() === "dark";
+  const [category, setCategory] = useState<Category>("All");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const { itemId } = useLocalSearchParams<{ itemId?: string }>();
   const router = useRouter();
 
@@ -60,6 +67,10 @@ export default function PasscodesScreen() {
     refreshVault,
     completeVaultRecovery,
   } = useVault();
+
+  useEffect(() => {
+    if (!isVaultUnlocked) setSelectedId(null);
+  }, [isVaultUnlocked]);
 
   // =====================================================
   // STATE
@@ -214,6 +225,9 @@ export default function PasscodesScreen() {
         username: decryptedUsername,
         password: decryptedPassword,
         securityAnswer: decryptedSecurityAnswer,
+        createdAt: item.createdAt,
+        category: item.category,
+        website: item.website,
         updatedAt: item.updatedAt,
         srNo: item.srNo,
       };
@@ -487,9 +501,10 @@ export default function PasscodesScreen() {
   // =====================================================
 
   const handleUnlock = async () => {
-    const trimmedPassword = vaultPassword.trim();
+    if (unlocking) return;
+    const enteredPassword = vaultPassword;
 
-    if (!trimmedPassword) {
+    if (!enteredPassword) {
       setVaultError("Please enter your vault password.");
 
       return;
@@ -499,7 +514,7 @@ export default function PasscodesScreen() {
       setUnlocking(true);
       setVaultError("");
 
-      const success = await unlockVault(trimmedPassword);
+      const success = await unlockVault(enteredPassword);
 
       if (!success) {
         setVaultError("Incorrect vault password. Please try again.");
@@ -523,8 +538,6 @@ export default function PasscodesScreen() {
         text2: "Your saved credentials are now available.",
       });
     } catch (error: any) {
-      console.log("UNLOCK VAULT ERROR:", error);
-
       setVaultError(error?.message || "Unable to unlock vault.");
     } finally {
       setUnlocking(false);
@@ -802,6 +815,7 @@ export default function PasscodesScreen() {
       setDeleting(true);
 
       await deletePasscode(deleteConfirmId);
+      if (selectedId === deleteConfirmId) setSelectedId(null);
 
       const targetPage = page > 1 && passcodes.length === 1 ? page - 1 : page;
 
@@ -827,13 +841,11 @@ export default function PasscodesScreen() {
     }
   };
 
-  const renderPasscode = (item: Passcode, index: number) => (
+  const renderPasscode = (item: Passcode) => (
     <PasscodeCard
       key={item._id}
       item={item}
-      index={index}
-      theme={theme}
-      styles={styles}
+      onOpen={(entry) => setSelectedId(entry._id)}
       isRevealed={revealedIds.has(item._id)}
       copiedField={copiedField}
       onDelete={handleDelete}
@@ -847,33 +859,66 @@ export default function PasscodesScreen() {
   // UI
   // =====================================================
 
+  const selectedPasscode = passcodes.find(item => item._id === selectedId);
+  const showingDetails = !!selectedPasscode && isVaultUnlocked && !!vaultKey;
+  const activeOperation = showForgotPasswordModal ? 'recovery' : showVaultModal ? 'unlock' : deleteConfirmId ? 'delete' : editingPasscode ? 'edit' : showForm ? 'add' : null;
+  const activeView = activeOperation || (showingDetails ? 'details' : 'list');
+  const operationBusy = creating || updating || deleting || unlocking || creatingVault;
+  const managementModals = <PasscodeModals
+            editingPasscode={activeOperation === "edit" ? editingPasscode : null}
+            setEditingPasscode={setEditingPasscode}
+            theme={theme}
+            editUsername={editUsername}
+            setEditUsername={setEditUsername}
+            editPassword={editPassword}
+            setEditPassword={setEditPassword}
+            updating={updating}
+            handleUpdate={handleUpdate}
+            deleteConfirmId={activeOperation === "delete" ? deleteConfirmId : null}
+            setDeleteConfirmId={setDeleteConfirmId}
+            deleting={deleting}
+            confirmDelete={confirmDelete}
+          />;
+
   return (
     <AppLayout
+      key={activeView}
       mobileTitle="Passcodes"
+      mobileSubtitle="Manage all your accounts in one place."
+      themeOverride={theme}
+      contentBackgroundColor={theme.background}
       mobileHeaderActions={
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Save passcode"
-          disabled={isVaultLoading}
+          accessibilityLabel="Add passcode"
+          disabled={isVaultLoading || operationBusy || activeOperation === "recovery"}
           onPress={() => {
+            setEditingPasscode(null);
+            setDeleteConfirmId(null);
+            setShowForm(false);
             if (!isVaultCreated || !isVaultUnlocked || !vaultKey) openVaultModal();
             else setShowForm(true);
           }}
-          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: isVaultLoading ? 0.5 : 1 }}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: isVaultLoading || operationBusy || activeOperation === "recovery" ? 0.5 : 1 }}
         >
           <Feather name="plus" size={27} color={theme.accent} />
         </Pressable>
       }
     >
+      <StatusBar style={dark ? "light" : "dark"} />
       <View
         style={{
-          padding: 10,
+          padding: showingDetails || activeOperation ? 0 : 16,
           flex: 1,
         }}
       >
-        <View style={styles.container}>
+        <View style={[styles.container, { maxWidth: 900, width: "100%", alignSelf: "center" }]}>
+          {!activeOperation && (showingDetails && selectedPasscode ? <PasscodeDetails key={selectedPasscode._id} item={selectedPasscode} onClose={() => setSelectedId(null)} onEdit={handleEdit} onDelete={handleDelete} onCopy={copyToClipboard} copiedField={copiedField} /> : <>
           {!!itemId && <Button label="Show all passcodes" secondary onPress={() => { router.setParams({ itemId: "" }); setSearch(""); }} />}
           <PasscodesHeader
+            passcodes={passcodes}
+            category={category}
+            setCategory={setCategory}
             theme={theme}
             isVaultLoading={isVaultLoading}
             isVaultCreated={isVaultCreated}
@@ -898,8 +943,10 @@ export default function PasscodesScreen() {
             goToNextPage={goToNextPage}
           />
 
+          </>)}
+
           <PasscodeForm
-            showForm={showForm}
+            showForm={activeOperation === "add"}
             theme={theme}
             cancelCreate={cancelCreate}
             platform={platform}
@@ -911,20 +958,20 @@ export default function PasscodesScreen() {
             creating={creating}
             handleCreate={handleCreate}
           />
-          <VaultStateView
+          {!activeOperation && !showingDetails && <VaultStateView
             theme={theme}
             isVaultLoading={isVaultLoading}
             isVaultCreated={isVaultCreated}
             isVaultUnlocked={isVaultUnlocked}
             loading={loading}
-            passcodes={passcodes}
-            search={search}
+            passcodes={passcodes.filter(item => category === "All" || entryCategory(item) === category)}
+            search={search || (category !== "All" ? category : "")}
             openVaultModal={openVaultModal}
             renderPasscode={renderPasscode}
-          />
+          />}
 
           <VaultModal
-            showVaultModal={showVaultModal}
+            showVaultModal={activeOperation === "unlock"}
             closeVaultModal={closeVaultModal}
             theme={theme}
             isVaultCreated={isVaultCreated}
@@ -945,7 +992,7 @@ export default function PasscodesScreen() {
             onForgotPassword={openForgotPasswordModal}
           />
           <ForgotVaultPasswordModal
-            visible={showForgotPasswordModal}
+            visible={activeOperation === "recovery"}
             onClose={() => setShowForgotPasswordModal(false)}
             onSuccess={(masterVaultKey) => {
               completeVaultRecovery(masterVaultKey);
@@ -953,21 +1000,8 @@ export default function PasscodesScreen() {
               void refreshVault();
             }}
           />
-          <PasscodeModals
-            editingPasscode={editingPasscode}
-            setEditingPasscode={setEditingPasscode}
-            theme={theme}
-            editUsername={editUsername}
-            setEditUsername={setEditUsername}
-            editPassword={editPassword}
-            setEditPassword={setEditPassword}
-            updating={updating}
-            handleUpdate={handleUpdate}
-            deleteConfirmId={deleteConfirmId}
-            setDeleteConfirmId={setDeleteConfirmId}
-            deleting={deleting}
-            confirmDelete={confirmDelete}
-          />
+          {managementModals}
+
         </View>
       </View>
     </AppLayout>
