@@ -27,7 +27,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
 import { useThemePreferenceReady } from "@/state/theme-preference";
-const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search"];
+const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games"];
 
 // Google redirects to the origin on web, so completion must run on every route.
 // Expo validates the stored redirect URL; AuthSession validates OAuth state.
@@ -303,6 +303,11 @@ export default function RootLayout() {
           {/* =================================================
               OTHER SCREENS
               ================================================= */}
+
+          <Stack.Screen name="games/index" options={{ headerShown: false, title: "Games" }} />
+          <Stack.Screen name="games/tap-clash" options={{ headerShown: false, title: "Tap Clash" }} />
+          <Stack.Screen name="games/path" options={{ headerShown: false, title: "Path" }} />
+          <Stack.Screen name="games/tic-tac-toe" options={{ headerShown: false, title: "Tic Tac Toe" }} />
 
           <Stack.Screen
             name="search"

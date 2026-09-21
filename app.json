@@ -13,9 +13,12 @@
     },
     "android": {
       "package": "com.pranjal.vault",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#FBFAF4",
-        "foregroundImage": "./assets/images/icon.png"
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -52,16 +55,26 @@
           }
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "2300fd64-3c00-4362-8969-b04d9080e390"
+        "projectId": "edc01505-c903-4305-adaa-be880390fba9"
       }
-    }
+    },
+    "owner": "pranjalt363"
   }
 }

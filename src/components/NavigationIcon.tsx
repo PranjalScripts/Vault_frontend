@@ -4,7 +4,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import type { StyleProp, TextStyle } from "react-native";
 
 const icons: Record<string, React.ComponentProps<typeof Feather>["name"]> = {
-  "/dashboard": "home", "/todos": "check-square", "/subjects": "book-open",
+  "/games": "grid", "/dashboard": "home", "/todos": "check-square", "/subjects": "book-open",
   "/passcodes": "lock", "/trash": "trash-2", "/settings": "settings", "/search": "search",
 };
 export function NavigationIcon({ path, size = 22, color, style }: { path: string; size?: number; color: string; style?: StyleProp<TextStyle> }) {

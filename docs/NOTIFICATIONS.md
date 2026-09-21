@@ -58,4 +58,4 @@ Device acceptance: verify compact/expanded content in light and dark mode, foreg
 - Scheduled background delivery was not conclusively observed in this device run; the native AlarmManager integration remains in place. Full lock-screen, idle-mode, tap-route and visual theme acceptance checks remain manual.
 - Full project TypeScript check still reports the pre-existing `/explore` route mismatch in `src/components/app-tabs.web.tsx`.
 
-The right-side notification artwork comes from `assets/images/notification logo.png`. `scripts/sync-notification-assets.cjs` copies it unchanged into the notification module’s Android drawable resources during `postinstall`. Compact/heads-up views use 36dp artwork; expanded views use 56dp. Run that script and rebuild Android after replacing the image.
+The right-side notification artwork comes from `assets/images/adaptive-icon.png`. `scripts/sync-notification-assets.cjs` copies it unchanged into the notification module’s Android drawable resources during `postinstall`. Compact/heads-up views use 36dp artwork; expanded views use 56dp. Run that script and rebuild Android after replacing the image.

@@ -37,7 +37,9 @@ export function AppLayout({
   scrollable = true,
   contentBackgroundColor,
   mobileBackAction,
+  mobileBackLabel = "Back to subjects",
   desktopBreadcrumb,
+  immersive = false,
 }: {
   children: React.ReactNode;
   title?: string;
@@ -51,7 +53,9 @@ export function AppLayout({
   scrollable?: boolean;
   contentBackgroundColor?: string;
   mobileBackAction?: () => void;
+  mobileBackLabel?: string;
   desktopBreadcrumb?: React.ReactNode;
+  immersive?: boolean;
 }) {
   const { width } = useWindowDimensions();
   const baseTheme = useTheme();
@@ -172,6 +176,7 @@ export function AppLayout({
       path: "/passcodes",
     },
 
+    { name: "Games", path: "/games" },
     { name: "WhatsApp", path: "/whatsapp" },
     { name: "Recently Deleted", path: "/trash" },
     { name: "Settings", path: "/settings" },
@@ -252,6 +257,10 @@ export function AppLayout({
    * DESKTOP LAYOUT
    * =========================================================
    */
+
+  if (immersive) {
+    return <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: theme.background }}>{children}</SafeAreaView>;
+  }
 
   if (isDesktop) {
     return (
@@ -652,7 +661,7 @@ export function AppLayout({
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={
-              mobileBackAction ? "Back to subjects" : "Open menu"
+              mobileBackAction ? mobileBackLabel : "Open menu"
             }
           >
             <Text
