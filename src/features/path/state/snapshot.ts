@@ -25,6 +25,8 @@ export function decodeState(raw: string | null): SavedState {
       const p = data.game.puzzle;
       if (indexOf(p.solution[p.solution.length - 1], p.cols) !== indexOf(p.checkpoints[p.checkpoints.length - 1].position, p.cols)) data.game = null;
     }
+    // Completed results belong to the current visit; reopening starts at puzzle selection.
+    if (data.game?.completed) data.game = null;
     return { ...data, recent: data.recent.slice(-100) };
   } catch { return emptyState(); }
 }

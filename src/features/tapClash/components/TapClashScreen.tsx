@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
+import { AccessibilityInfo, BackHandler, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppLayout } from '@/components/AppLayout';
 import { useGameTheme as useTheme, GameBack } from '@/features/games/GameUI';
@@ -25,7 +25,7 @@ export default function TapClashScreen() {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => { pause(); return true; });
     return () => handler.remove();
   }, [battle, pause, game.phase]);
-  return <AppLayout themeOverride={theme} mobileTitle="Tap Clash" mobileBackLabel="Back to Games" mobileBackAction={() => router.replace('/games')} showMobileSearch={false} scrollable={false}>
+  return <AppLayout themeOverride={theme} mobileTitle="Tap Clash" scrollable={false}>
     {!battle && <GameBack onPress={() => router.replace('/games')} onSettings={() => setSettings(value => !value)} />}
     {battle ? <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' }}>
       <BattleArena snapshot={game.snapshot} mode={game.mode} boundary={game.boundary} redPulse={game.redPulse} bluePulse={game.bluePulse} enabled={game.phase === 'running'} reducedMotion={reducedMotion} onTaps={game.tap} />
@@ -33,9 +33,9 @@ export default function TapClashScreen() {
       {(game.phase === 'running' || game.phase === 'countdown') && <Pressable accessibilityRole="button" accessibilityLabel="Pause match" onPress={game.pause} style={{ position: 'absolute', right: 10, top: 10, minWidth: 48, minHeight: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#00000044' }}><Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 18 }}>Ⅱ</Text></Pressable>}
       {game.phase === 'paused' && <View style={styles.overlay}><View accessibilityViewIsModal style={[styles.overlayCard, { backgroundColor: theme.background }]}><Text style={[styles.title, { color: theme.text, fontSize: 28 }]}>PAUSED</Text><Text style={[styles.subtitle, { color: theme.textSecondary }]}>Take a breath. Both sides are paused.</Text><ClashButton title="RESUME" primary onPress={game.resume} /><ClashButton title="RETURN TO MENU" onPress={() => game.menu('menu')} /></View></View>}
       {game.phase === 'result' && game.result && <ResultOverlay result={game.result} onRematch={() => game.start(game.mode)} onChange={() => game.menu(game.mode === 'computer' ? 'level' : 'menu')} onBack={() => router.replace('/games')} />}
-    </View> : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-      <ClashSetup game={game} settings={settings} />
+    </View> : <View style={{ flex: 1, minHeight: 0, paddingBottom: 8 }}>
+      <ClashSetup game={game} settings={settings} onCloseSettings={() => setSettings(false)} />
       {game.error ? <Text accessibilityLiveRegion="polite" style={{ color: theme.danger, textAlign: 'center', margin: 12 }}>{game.error}</Text> : null}
-    </ScrollView>}
+    </View>}
   </AppLayout>;
 }

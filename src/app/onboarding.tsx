@@ -14,12 +14,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 import { googleLogin, saveAuthToken } from "@/api/api";
+import { getPuzzleById } from "@/features/puzzles/puzzles";
 import { useTheme } from "@/hooks/use-theme";
 
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
+  const { shareToken, puzzleId } = useLocalSearchParams<{ shareToken?: string; puzzleId?: string }>();
+  const returnToPuzzle = typeof puzzleId === "string" && getPuzzleById(puzzleId) ? puzzleId : null;
   const returnToShare = typeof shareToken === "string" && /^[a-f0-9]{64}$/.test(shareToken) ? shareToken : null;
   const theme = useTheme();
 
@@ -64,13 +66,14 @@ export default function OnboardingScreen() {
       await saveAuthToken(token, user);
 
       if (returnToShare) router.replace({ pathname: "/share", params: { token: returnToShare, add: "1" } });
+      else if (returnToPuzzle) router.replace({ pathname: "/games/puzzles/[id]", params: { id: returnToPuzzle } });
       else router.replace("/dashboard");
     } catch (error: any) {
       setLoginError(error?.response?.data?.message || error?.message || "Sign-in failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  }, [router, returnToShare]);
+  }, [router, returnToShare, returnToPuzzle]);
 
   const handleGoogleLogin = async () => {
     if (loginInProgress.current) return;

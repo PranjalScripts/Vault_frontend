@@ -113,7 +113,8 @@ export default function RootLayout() {
    */
 
   const currentRoute = segments[0];
-  const isProtectedRoute = !!currentRoute && PROTECTED_ROUTES.includes(currentRoute);
+  const isPublicPuzzle = segments.length === 3 && segments[0] === "games" && segments[1] === "puzzles" && segments[2] === "[id]";
+  const isProtectedRoute = !isPublicPuzzle && !!currentRoute && PROTECTED_ROUTES.includes(currentRoute);
   const redirectTarget = !isAuthenticated && isProtectedRoute
     ? "/"
     : isAuthenticated && !currentRoute
@@ -304,9 +305,11 @@ export default function RootLayout() {
               OTHER SCREENS
               ================================================= */}
 
+          <Stack.Screen name="games/puzzles/[id]" options={{ headerShown: false, title: "Puzzles", presentation: "card" }} />
           <Stack.Screen name="games/index" options={{ headerShown: false, title: "Games" }} />
           <Stack.Screen name="games/tap-clash" options={{ headerShown: false, title: "Tap Clash" }} />
           <Stack.Screen name="games/path" options={{ headerShown: false, title: "Path" }} />
+          <Stack.Screen name="games/path/new" options={{ headerShown: false, title: "New Puzzle", presentation: "card", animation: "slide_from_right" }} />
           <Stack.Screen name="games/tic-tac-toe" options={{ headerShown: false, title: "Tic Tac Toe" }} />
 
           <Stack.Screen

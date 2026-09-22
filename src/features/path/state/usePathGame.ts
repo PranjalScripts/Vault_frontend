@@ -55,7 +55,7 @@ export function usePathGame() {
         lastSaved.current = JSON.stringify(saved); clock.current = active.current ? performance.now() : null; commit(saved); setReady(true);
       }).catch(() => { if (!cancelled && mounted.current) { setError('Saved progress could not be refreshed.'); setReady(true); } });
     }
-    return () => { cancelled = true; if (saveTimer.current) clearTimeout(saveTimer.current); accountTime(); focused.current = false; active.current = false; clock.current = null; generation.current?.abort(); persist(); };
+    return () => { cancelled = true; if (saveTimer.current) clearTimeout(saveTimer.current); accountTime(); focused.current = false; active.current = false; clock.current = null; generation.current?.abort(); if (ref.current.game?.completed) commit({ ...ref.current, game: null }); persist(); };
   }, [accountTime, commit, persist]));
   useEffect(() => {
     const visibility = () => { accountTime(); active.current = focused.current && AppState.currentState === 'active' && (typeof document === 'undefined' || !document.hidden); clock.current = active.current ? performance.now() : null; if (!active.current) persist(); };

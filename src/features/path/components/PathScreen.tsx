@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { AppLayout } from '@/components/AppLayout';
 import { useGameTheme as useTheme, GameBack } from '@/features/games/GameUI';
@@ -8,14 +8,23 @@ import { usePathGame } from '../state/usePathGame';
 import { formatTime } from '../state/game';
 import { PathBoard } from './PathBoard';
 import { PathButton, label } from './PathUI';
-import { NewPuzzleModal } from './NewPuzzleModal';
 import { PathSetup } from './PathSetup';
 import { CompletionPanel } from './CompletionPanel';
-export default function PathScreen() {
-  const theme = useTheme(), router = useRouter(), game = usePathGame(), [selector, setSelector] = useState(false);
-  const scrollGesture = useMemo(() => Gesture.Native(), []);
-  const [drawing, setDrawing] = useState(false);
-  const current = game.state.game;
+export default function PathScreen({ newPuzzle = false }: { newPuzzle?: boolean }) {
+  const theme = useTheme(), router = useRouter(), game = usePathGame();
+  const [contentWidth, setContentWidth] = useState(0);
+  const wide = contentWidth >= 680;
+  const current = newPuzzle ? null : game.state.game;
+  const pendingAttempt = useRef<string | null | undefined>(undefined);
+  const returnToPuzzle = () => router.canGoBack() ? router.back() : router.replace('/games/path');
+  useEffect(() => {
+    if (newPuzzle && pendingAttempt.current !== undefined && game.state.game && game.state.game.attemptId !== pendingAttempt.current) {
+      pendingAttempt.current = undefined;
+      if (router.canGoBack()) router.back();
+      else router.replace('/games/path');
+    }
+  }, [newPuzzle, game.state.game, router]);
+  const openNewPuzzle = () => router.push('/games/path/new');
   const [completedGameId, setCompletedGameId] = useState<string | null>(null);
   useEffect(() => {
     setCompletedGameId(null);
@@ -24,32 +33,65 @@ export default function PathScreen() {
     return () => clearTimeout(timer);
   }, [current?.attemptId, current?.completed]);
   const showCompletion = current?.completed && completedGameId === current.attemptId;
-  return <AppLayout themeOverride={theme} mobileTitle="Path" scrollable={false} mobileBackLabel="Back to Games" mobileBackAction={() => router.replace('/games')} showMobileSearch={false}>
-    <GameBack onPress={() => router.replace('/games')} />
-    <GestureHandlerRootView style={{ flex: 1 }}><GestureDetector gesture={scrollGesture}><ScrollView scrollEnabled={!drawing} bounces={false} overScrollMode="never" contentContainerStyle={{ alignItems: 'center' as const, paddingBottom: 28, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
-      <View style={{ width: '100%', maxWidth: 520, alignItems: 'center' as const, gap: 14 }}>
-        {current && <Text style={{ fontSize: 30, fontWeight: '800', letterSpacing: 5, color: theme.text }}>PATH</Text>}
-
-        {game.error ? <Text accessibilityLiveRegion="polite" style={{ color: theme.danger, textAlign: 'center' }}>{game.error}</Text> : null}
-        {!game.ready && !game.error && <ActivityIndicator color={theme.accent} accessibilityLabel="Loading saved game" />}
-        {game.generating ? <View style={{ gap: 16, padding: 28, alignItems: 'center' }}><ActivityIndicator color={theme.accent} /><Text accessibilityLiveRegion="polite" style={{ color: theme.text }}>Generating puzzle…</Text><PathButton title="Cancel" onPress={game.cancel} /></View> : null}
-        {current && <>
-          <Text style={{ color: theme.textSecondary }}>{label(current.puzzle.difficulty)} · {label(current.puzzle.variation)}{current.puzzle.seed.startsWith('path-daily-') ? ' · Daily' : ''}</Text>
-          {!current.completed && <Text accessibilityLabel={`Elapsed time ${formatTime(current.elapsed)}`} style={{ color: theme.text, fontSize: 30, fontVariant: ['tabular-nums'], fontWeight: '600' }}>{formatTime(current.elapsed)}</Text>}
-          {showCompletion ? <CompletionPanel game={current} onNew={() => setSelector(true)} onReplay={game.replay} onBack={() => router.replace('/games')} /> : <>
-            <PathBoard scrollGesture={scrollGesture} onDrawingChange={setDrawing} puzzle={current.puzzle} path={current.path} disabled={game.generating || !game.ready || current.completed} hint={game.hint?.cell ?? null} invalid={game.invalidCell} onEnterCells={game.enterCells} />
-            <View style={{ width: '100%', gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: theme.textSecondary }}>Progress</Text><Text style={{ color: theme.text, fontWeight: '700' }}>{current.path.length} / {current.puzzle.solution.length}</Text></View>
-              <View style={{ height: 5, backgroundColor: theme.backgroundSelected, borderRadius: 3 }}><View style={{ height: 5, width: `${current.path.length / current.puzzle.solution.length * 100}%`, backgroundColor: theme.accent, borderRadius: 3 }} /></View>
-            </View>
-            <Text accessibilityLiveRegion="polite" style={{ minHeight: 38, color: game.invalidCell !== null ? theme.danger : theme.textSecondary, textAlign: 'center', fontSize: 13, lineHeight: 19 }}>{current.completed ? 'Path complete!' : game.hint ? game.hint.backtrack ? 'Backtrack to the highlighted cell, then try a new direction.' : 'Continue to the highlighted cell.' : game.invalidCell !== null ? 'Move to a neighboring open cell. Follow the numbers in order.' : current.path.length ? 'Continue from the endpoint. Drag backward to undo.' : current.puzzle.finishAtLastCheckpoint ? `Slide from 1 to ${current.puzzle.checkpoints.length}, filling every open square.` : 'Start at 1. Slide through every open square in number order.'}</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}><PathButton title="Undo" disabled={!current.path.length || game.generating || current.completed} onPress={game.undo} /><PathButton title="Hint" disabled={game.generating || current.completed} onPress={game.requestHint} /><PathButton title="Restart" disabled={game.generating} onPress={game.replay} /></View>
-          </>}
-        </>}
-        {game.ready && current && !current.completed && <PathButton title='New Puzzle' primary disabled={game.generating} onPress={() => setSelector(true)} />}
-        {game.ready && !current && <PathSetup difficulty={game.state.difficulty} variation={game.state.variation} disabled={game.generating} onStart={(d, v, daily) => { void game.start(d, v, daily); }} />}
+  return <AppLayout themeOverride={theme} mobileTitle={newPuzzle ? 'New Puzzle' : 'Path'} scrollable={false}>
+    <GameBack backLabel={newPuzzle ? 'Back to puzzle' : 'Back to Games'} onPress={newPuzzle ? returnToPuzzle : () => router.replace('/games')} />
+    <GestureHandlerRootView style={styles.content} onLayout={event => setContentWidth(event.nativeEvent.layout.width)}>
+      {game.error ? <Text accessibilityLiveRegion="polite" style={{ color: theme.danger, fontSize: 12 }}>{game.error}</Text> : null}
+      {!game.ready && !game.error && <ActivityIndicator color={theme.accent} accessibilityLabel="Loading saved game" />}
+      {game.generating && <View style={styles.generation}><ActivityIndicator color={theme.accent} /><Text accessibilityLiveRegion="polite" style={{ color: theme.text, flex: 1 }}>Generating puzzle…</Text><PathButton title="Cancel" onPress={game.cancel} /></View>}
+      <View style={[styles.layout, wide && styles.columns]}>
+        {(current || wide) && <BoardSpace>{size =>
+          current ? <PathBoard size={size} puzzle={current.puzzle} path={current.path} disabled={game.generating || !game.ready || current.completed} hint={game.hint?.cell ?? null} invalid={game.invalidCell} onEnterCells={game.enterCells} /> : <BoardPreview />
+        }</BoardSpace>}
+        <View style={[styles.info, wide ? styles.desktopInfo : styles.mobileInfo]}>
+          {current ? <>
+            {showCompletion ? <CompletionPanel game={current} onNew={openNewPuzzle} onReplay={game.replay} onBack={() => router.replace('/games')} /> : <>
+              <View style={styles.summary}>
+                <Text style={{ color: theme.textSecondary, fontSize: 12, flex: 1 }}>{label(current.puzzle.difficulty)} · {label(current.puzzle.variation)}{current.puzzle.seed.startsWith('path-daily-') ? ' · Daily' : ''}</Text>
+                {!current.completed && <Text accessibilityLabel={`Elapsed time ${formatTime(current.elapsed)}`} style={{ color: theme.text, fontSize: 22, fontVariant: ['tabular-nums'], fontWeight: '600' }}>{formatTime(current.elapsed)}</Text>}
+              </View>
+              <View style={{ gap: 4 }}>
+                <View style={styles.summary}><Text style={{ color: theme.textSecondary, fontSize: 12 }}>Progress</Text><Text style={{ color: theme.text, fontSize: 12, fontWeight: '700' }}>{current.path.length} / {current.puzzle.solution.length}</Text></View>
+                <View style={{ height: 4, backgroundColor: theme.backgroundSelected, borderRadius: 3 }}><View style={{ height: 4, width: `${current.path.length / current.puzzle.solution.length * 100}%`, backgroundColor: theme.accent, borderRadius: 3 }} /></View>
+              </View>
+              <Text accessibilityLiveRegion="polite" style={{ color: game.invalidCell !== null ? theme.danger : theme.textSecondary, fontSize: 12, lineHeight: 16 }}>{current.completed ? 'Path complete!' : game.hint ? game.hint.backtrack ? 'Backtrack to the highlighted cell, then try a new direction.' : 'Continue to the highlighted cell.' : game.invalidCell !== null ? 'Move to a neighboring open cell. Follow the numbers in order.' : current.path.length ? 'Continue from the endpoint. Drag backward to undo.' : current.puzzle.finishAtLastCheckpoint ? `Slide from 1 to ${current.puzzle.checkpoints.length}, filling every open square.` : 'Start at 1. Slide through every open square in number order.'}</Text>
+              <View style={styles.controls}><PathButton title="Undo" disabled={!current.path.length || game.generating || current.completed} onPress={game.undo} /><PathButton title="Hint" disabled={game.generating || current.completed} onPress={game.requestHint} /><PathButton title="Restart" disabled={game.generating} onPress={game.replay} /></View>
+              {game.ready && !current.completed && <PathButton title="New Puzzle" primary disabled={game.generating} onPress={openNewPuzzle} />}
+            </>}
+          </> : game.ready && <PathSetup title={newPuzzle ? 'New Puzzle' : 'Path'} difficulty={game.state.difficulty} variation={game.state.variation} disabled={game.generating} onStart={(d, v, daily) => { pendingAttempt.current = game.state.game?.attemptId ?? null; void game.start(d, v, daily); }} />}
+        </View>
       </View>
-    </ScrollView></GestureDetector></GestureHandlerRootView>
-    <NewPuzzleModal visible={selector} difficulty={game.state.difficulty} variation={game.state.variation} onClose={() => setSelector(false)} onDaily={d => { setSelector(false); void game.start(d, 'classic', true); }} onGenerate={(d, v) => { setSelector(false); void game.start(d, v); }} />
+    </GestureHandlerRootView>
   </AppLayout>;
 }
+
+// Measure the flex space AppLayout actually gives us, including room reserved for controls.
+function BoardSpace({ children }: { children: (size: number) => React.ReactNode }) {
+  const [size, setSize] = useState(0);
+  return <View testID="path-board-space" style={styles.boardSpace} onLayout={({ nativeEvent: { layout } }) => setSize(Math.floor(Math.min(layout.width, layout.height)))}>
+    {size > 0 && <View style={{ width: size, height: size }}>{children(size)}</View>}
+  </View>;
+}
+
+// A presentation-only preview: selecting settings never starts or generates a puzzle.
+function BoardPreview() {
+  const theme = useTheme();
+  return <View accessible accessibilityLabel="Path board preview. Choose your settings to start a puzzle." style={[styles.preview, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+    {Array.from({ length: 25 }, (_, i) => <View key={i} style={{ width: '20%', height: '20%', borderWidth: .5, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}>
+      {[0, 9, 10, 19, 24].includes(i) && <Text style={{ color: theme.accent, fontSize: 22, fontWeight: '800' }}>{[0, 9, 10, 19, 24].indexOf(i) + 1}</Text>}
+    </View>)}
+  </View>;
+}
+const styles = StyleSheet.create({
+  content: { flex: 1, minHeight: 0, gap: 6, paddingBottom: 8 },
+  layout: { flex: 1, minHeight: 0, gap: 8 },
+  columns: { flexDirection: 'row', gap: 24, alignItems: 'stretch' },
+  boardSpace: { flex: 1, minHeight: 0, minWidth: 0, alignItems: 'center', justifyContent: 'center' },
+  info: { gap: 8, minWidth: 0 },
+  desktopInfo: { width: 320, justifyContent: 'center' },
+  mobileInfo: { width: '100%', maxWidth: 520, alignSelf: 'center', flexShrink: 0 },
+  summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  controls: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
+  generation: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  preview: { width: '100%', height: '100%', flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
+});

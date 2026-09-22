@@ -1,3 +1,7 @@
+
+
+
+
 import { PathPuzzle, indexOf } from '../engine/types';
 import { isComplete, move } from '../engine/validator';
 export type Game = { puzzle: PathPuzzle; path: number[]; elapsed: number; started: boolean; moves: number; mistakes: number; hints: number; completed: boolean; attemptId: string };

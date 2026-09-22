@@ -107,3 +107,13 @@ test('legacy unnumbered tails retire only the board while retaining stats and pr
   assert.deepEqual(decoded.stats, state.stats);
   assert.equal(decoded.difficulty, 'hard');
 });
+
+test('reopening a completed puzzle shows selection while preserving stats and preferences', () => {
+  let game = newGame(puzzle, 'completed-visit');
+  for (const cell of solution) game = applyMove(game, cell).game;
+  const stats = recordCompletion({ ...emptyStats(), played: 1 }, game, '2026-09-22');
+  const state = { ...emptyState(), game, stats, difficulty: 'hard', variation: 'walls', recent: [fingerprint(puzzle)] };
+  const restored = decodeState(JSON.stringify(state));
+  assert.deepEqual(restored, { ...state, game: null });
+  assert.deepEqual(decodeState(JSON.stringify(restored)), restored);
+});

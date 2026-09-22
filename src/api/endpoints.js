@@ -142,3 +142,6 @@ export const createSubjectShare = (id, topicId) => API.post(`/subjects/${id}/sha
 export const deleteTrashItem = (kind, id, subjectId) => API.delete(`/trash/${kind}/${id}`, { data: { subjectId } });
 export const emptyTrash = () => API.delete("/trash");
 export const importSharedSubject = (token) => API.post(`/subjects/shared/${token}/import`);
+
+// Solutions are authenticated and must not enter the response cache.
+export const getPuzzleAnswer = (id, signal) => API.get(`/puzzles/${encodeURIComponent(id)}/answer`, { cache: false, signal });

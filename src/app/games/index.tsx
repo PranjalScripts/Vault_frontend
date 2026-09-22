@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
+import { PuzzleSection } from "@/features/puzzles/PuzzleSection";
 import { AppLayout } from "@/components/AppLayout";
 import {
   GameArt,
@@ -21,7 +22,7 @@ const games = [
     description:
       "Connect every cell. Trace a single route through checkpoints.",
     tags: ["Logic", "Focus", "Variations"],
-    filters: ["Single Player", "Puzzles"],
+    filters: ["Single Player"],
   },
   {
     kind: "clash" as GameKind,
@@ -40,7 +41,7 @@ const games = [
     description:
       "Three in a row wins. Classic game, play against a friend or AI.",
     tags: ["Strategy", "Classic", "Fun"],
-    filters: ["Single Player", "Multiplayer", "Puzzles"],
+    filters: ["Single Player", "Multiplayer"],
   },
 ];
 export default function GamesScreen() {
@@ -217,57 +218,10 @@ export default function GamesScreen() {
               </Pressable>
             );
           })}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 16,
-            backgroundColor: theme.backgroundElement,
-            borderColor: theme.border,
-            borderWidth: 1,
-            borderRadius: 20,
-            padding: 18,
-          }}
-        >
-          <FontAwesome5 name="gamepad" size={30} color={theme.accent} />
-          <View style={{ flex: 1, gap: 5 }}>
-            <Text
-              style={{ color: theme.text, fontSize: 16, fontWeight: "600" }}
-            >
-              More Games Coming Soon
-            </Text>
-            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-              Puzzles, brain training, logic and more.
-            </Text>
-          </View>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 16,
-            padding: 18,
-            backgroundColor: theme.backgroundElement,
-            borderWidth: 1,
-            borderColor: theme.border,
-            borderRadius: 20,
-          }}
-        >
-          <Text
-            style={{ color: theme.accent, fontSize: 40, fontWeight: "800" }}
-          >
-            “
-          </Text>
-          <View style={{ gap: 5, flexShrink: 1 }}>
-            <Text style={{ color: theme.text, fontSize: 14 }}>
-              A sharper you, one game at a time.
-            </Text>
-            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-              — Play. Improve. Repeat.
-            </Text>
-          </View>
-        </View>
+        {(filter === "Puzzles") && <PuzzleSection key={filter} categorized={filter === "Puzzles"} />}
+        {filter !== "Puzzles" && <>
+
+        </>}
       </View>
     </AppLayout>
   );

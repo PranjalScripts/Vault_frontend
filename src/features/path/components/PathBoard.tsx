@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -6,11 +6,12 @@ import { PathStroke } from '../engine/stroke';
 import { useGameTheme as useTheme } from '@/features/games/GameUI';
 import { PathPuzzle, indexOf } from '../engine/types';
 import { PathSegment } from './PathSegment';
-type Props = { scrollGesture: ReturnType<typeof Gesture.Native>; onDrawingChange: (active: boolean) => void; puzzle: PathPuzzle; path: number[]; hint: number | null; invalid: number | null; disabled: boolean; onEnterCells: (cells: number[]) => void };
+type Props = { size: number; puzzle: PathPuzzle; path: number[]; hint: number | null; invalid: number | null; disabled: boolean; onEnterCells: (cells: number[]) => void };
 export function PathBoard(props: Props) {
-  const theme = useTheme(), [width, setWidth] = useState(0);
+  const theme = useTheme(), width = props.size;
   const latest = useRef(props); latest.current = props;
   const boardWidth = useRef(0), stroke = useRef(new PathStroke());
+  boardWidth.current = Math.max(0, width - 2);
   const { puzzle, path } = props, cellSize = Math.max(0, width - 2) / puzzle.cols;
   const preview = useSharedValue({ x: 0, y: 0, length: 0, angle: 0, visible: false });
   const previewStyle = useAnimatedStyle(() => ({
@@ -21,7 +22,6 @@ export function PathBoard(props: Props) {
   const finish = useCallback(() => {
     stroke.current.end();
     preview.value = { ...preview.value, visible: false };
-    latest.current.onDrawingChange(false);
   }, [preview]);
   const updatePreview = useCallback((point: { x: number; y: number }) => {
     const segment = stroke.current.preview(point);
@@ -33,9 +33,9 @@ export function PathBoard(props: Props) {
       length, angle: Math.atan2(dy, dx), visible: true };
   }, [preview]);
   const gesture = useMemo(() => {
-    // The native scroll handler must wait for the board, even before JS toggles scrollEnabled.
+    // The bounded page has no scroll handler competing with the board gesture.
     const pan = Gesture.Pan().minDistance(0).maxPointers(1).shouldCancelWhenOutside(false)
-      .blocksExternalGesture(props.scrollGesture).runOnJS(true);
+      .runOnJS(true);
     const localPoint = (event: { x: number; y: number }) => {
       const w = boardWidth.current, h = w * latest.current.puzzle.rows / latest.current.puzzle.cols;
       // Include the one-pixel outer border in the edge cells; real departures still suspend drawing.
@@ -51,18 +51,17 @@ export function PathBoard(props: Props) {
     return pan.onBegin(event => {
       const current = latest.current;
       if (current.disabled) return;
-      current.onDrawingChange(true);
       const point = localPoint(event);
       const cells = stroke.current.begin(current.puzzle, current.path, point, boardWidth.current);
       if (cells.length) current.onEnterCells(cells);
       updatePreview(point);
     }).onUpdate(update).onEnd(update).onFinalize(finish);
-  }, [props.scrollGesture, finish, updatePreview]);
-  useEffect(() => { finish(); return finish; }, [puzzle.id, props.disabled, finish]);
+  }, [finish, updatePreview]);
+  useEffect(() => { finish(); return finish; }, [puzzle.id, props.disabled, width, finish]);
   const checkpoints = new Map(puzzle.checkpoints.map(c => [indexOf(c.position, puzzle.cols), c.number]));
   const blocked = new Set(puzzle.blockedCells.map(c => indexOf(c, puzzle.cols))), visited = new Set(path);
   const thickness = Math.max(7, cellSize * .2);
-  return <GestureDetector gesture={gesture} touchAction="none" userSelect="none"><View testID="path-board" onLayout={e => { const next = Math.max(0, e.nativeEvent.layout.width - 2); if (next !== boardWidth.current) { finish(); boardWidth.current = next; setWidth(e.nativeEvent.layout.width); } }}
+  return <GestureDetector gesture={gesture} touchAction="none" userSelect="none"><View testID="path-board"
     style={[styles.board, { aspectRatio: puzzle.cols / puzzle.rows, backgroundColor: theme.backgroundElement, borderColor: theme.border }, Platform.OS === 'web' ? { touchAction: 'none', userSelect: 'none' } : {}]}>
     {Array.from({ length: puzzle.rows * puzzle.cols }, (_, cell) => {
       const number = checkpoints.get(cell), isBlocked = blocked.has(cell);
@@ -83,7 +82,7 @@ export function PathBoard(props: Props) {
       })}
       <Animated.View style={[{ position: 'absolute', height: thickness, borderRadius: thickness, backgroundColor: theme.accent }, previewStyle]} />
       {Array.from(checkpoints).map(([cell, number]) => <View key={cell} style={{ position: 'absolute', left: (cell % puzzle.cols + .5) * cellSize - cellSize * .3, top: (Math.floor(cell / puzzle.cols) + .5) * cellSize - cellSize * .3, width: cellSize * .6, height: cellSize * .6, borderRadius: cellSize, backgroundColor: visited.has(cell) ? theme.accent : theme.backgroundElement, borderWidth: 2, borderColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: visited.has(cell) ? theme.background : theme.text, fontWeight: '800', fontSize: Math.max(12, cellSize * .27) }}>{number}</Text>
+        <Text style={{ color: visited.has(cell) ? theme.background : theme.text, fontWeight: '800', fontSize: Math.max(8, cellSize * .27) }}>{number}</Text>
       </View>)}
       {path.length > 0 && !checkpoints.has(path[path.length - 1]) && <View style={{ position: 'absolute', left: (path[path.length - 1] % puzzle.cols + .5) * cellSize - 6, top: (Math.floor(path[path.length - 1] / puzzle.cols) + .5) * cellSize - 6, width: 12, height: 12, borderRadius: 6, backgroundColor: theme.background, borderWidth: 3, borderColor: theme.accent }} />}
       {puzzle.walls.map((wall, i) => {

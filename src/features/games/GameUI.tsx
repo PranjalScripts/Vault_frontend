@@ -27,6 +27,7 @@ export const gameColors = { path: '#00E6B0', clash: '#FF416C', tic: '#F6C434' };
 
 /** Native shapes stay crisp on every phone, including the small catalog artwork. */
 export function GameArt({ kind, large = false }: { kind: GameKind; large?: boolean }) {
+  const theme = useGameTheme();
   const size = large ? 230 : 84;
   const color = gameColors[kind];
   return <View accessible={false} style={{ width: size, height: large ? 200 : size, alignItems: 'center', justifyContent: 'center' }}>
@@ -37,21 +38,21 @@ export function GameArt({ kind, large = false }: { kind: GameKind; large?: boole
       <View style={{ position: 'absolute', width: size * .59, height: 4, backgroundColor: color, transform: [{ rotate: '60deg' }], left: size * .33, top: size * .50 }} />
       <View style={{ position: 'absolute', width: size * .59, height: 4, backgroundColor: color, transform: [{ rotate: '-60deg' }], left: size * .04, top: size * .50 }} />
       {[{ left: .37, top: .14 }, { left: .08, top: .65 }, { left: .67, top: .65 }].map((point, i) => <View key={i} style={{ position: 'absolute', left: size * point.left, top: size * point.top, width: size * .25, height: size * .25, borderWidth: 3, borderColor: color, borderRadius: size, backgroundColor: '#032720', alignItems: 'center', justifyContent: 'center' }}><View style={{ width: '55%', height: '55%', borderRadius: size, backgroundColor: color }} /></View>)}
-    </> : <View style={{ width: size * .88, height: size * .88, flexDirection: 'row', flexWrap: 'wrap' }}>{['×', '○', '×', '○'].map((mark, i) => <View key={i} style={{ width: '50%', height: '50%', borderRightWidth: i % 2 === 0 ? 2 : 0, borderBottomWidth: i < 2 ? 2 : 0, borderColor: '#746342', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: i % 2 ? '#FFE04C' : '#FF9C28', fontSize: large ? 72 : 40, lineHeight: large ? 82 : 43, fontWeight: '500' }}>{mark}</Text></View>)}</View>}
+    </> : <View style={{ width: size * .88, height: size * .88, flexDirection: 'row', flexWrap: 'wrap' }}>{['×', '○', '×', '○'].map((mark, i) => <View key={i} style={{ width: '50%', height: '50%', borderRightWidth: i % 2 === 0 ? 2 : 0, borderBottomWidth: i < 2 ? 2 : 0, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: i % 2 ? theme.accent : theme.text, fontSize: large ? 72 : 40, lineHeight: large ? 82 : 43, fontWeight: '500' }}>{mark}</Text></View>)}</View>}
   </View>;
 }
 export function GameHero({ kind, title, subtitle }: { kind: GameKind; title: string; subtitle: string }) {
   const theme = useGameTheme();
   return <View style={{ alignItems: 'center' as const, paddingTop: 4, paddingBottom: 20 }}>
     <GameArt kind={kind} large />
-    <Text style={{ color: theme.text, fontSize: 34, fontWeight: '900' as const, fontStyle: 'italic' as const, letterSpacing: .5, marginTop: 12 }}>{title.split(' ').slice(0, -1).join(' ')}{title.includes(' ') ? ' ' : ''}<Text style={{ color: gameColors[kind] }}>{title.split(' ').at(-1)}</Text></Text>
+    <Text style={{ color: theme.text, fontSize: 34, fontWeight: '900' as const, fontStyle: 'italic' as const, letterSpacing: .5, marginTop: 12 }}>{title.split(' ').slice(0, -1).join(' ')}{title.includes(' ') ? ' ' : ''}<Text style={{ color: kind === 'tic' ? theme.accent : gameColors[kind] }}>{title.split(' ').at(-1)}</Text></Text>
     <Text style={{ color: theme.textSecondary, fontSize: 16, marginTop: 7, textAlign: 'center' as const }}>{subtitle}</Text>
   </View>;
 }
-export function GameBack({ onPress, onSettings }: { onPress: () => void; onSettings?: () => void }) {
+export function GameBack({ onPress, onSettings, backLabel = 'Back to Games' }: { backLabel?: string; onPress: () => void; onSettings?: () => void }) {
   const theme = useGameTheme();
   const iconButton = { width: 44, height: 44, justifyContent: 'center' as const, alignItems: 'center' as const };
-  return <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 14 }}><Pressable accessibilityRole="button" accessibilityLabel="Back to Games" onPress={onPress} style={iconButton}><Feather name="chevron-left" color={theme.text} size={30} /></Pressable>{onSettings && <Pressable accessibilityRole="button" accessibilityLabel="Game settings" onPress={onSettings} style={iconButton}><Feather name="more-horizontal" color={theme.text} size={26} /></Pressable>}</View>;
+  return <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 14 }}><Pressable accessibilityRole="button" accessibilityLabel={backLabel} onPress={onPress} style={iconButton}><Feather name="chevron-left" color={theme.text} size={30} /></Pressable>{onSettings && <Pressable accessibilityRole="button" accessibilityLabel="Game settings" onPress={onSettings} style={iconButton}><Feather name="more-horizontal" color={theme.text} size={26} /></Pressable>}</View>;
 }
 export function StartButton({ title = 'Start Game', color, onPress, disabled }: { title?: string; color: string; onPress: () => void; disabled?: boolean }) {
   const theme = useGameTheme();
