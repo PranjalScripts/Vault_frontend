@@ -90,3 +90,33 @@ test('missing credentials are fetched and wrong passwords stop after one refresh
   await assert.rejects(storedUnlock.unlockStoredVault('wrong-password', storedCredentials(original), fresh), { code: 'VAULT_UNLOCK_FAILED' });
   assert.equal(requests, 1);
 });
+
+test('existing Android vault unlocks after server trimmed the salt newline', async () => {
+  const password = 'android-original-password';
+  const salt = Buffer.alloc(32, 7).toString('base64');
+  // Android Base64.DEFAULT appends LF; the old client derived using that LF,
+  // while the server stored passwordSalt.trim(). Keep this fixture independent
+  // of createVaultCredentials so it continues to represent the legacy format.
+  const wrappingKey = await encryption.pbkdf2(password, salt + '\n', 200000, 32, 'SHA-256');
+  const masterKey = await vault.generateMasterVaultKey();
+  const wrapped = await vault.encryptWithVaultKey(masterKey, wrappingKey);
+  const verifier = await vault.encryptWithVaultKey('VAULT_VERIFIER_V1', wrappingKey);
+  const passcode = await vault.encryptWithVaultKey('keep-existing-secret', masterKey);
+  const recovered = await vault.unlockVault(password, salt, wrapped, verifier);
+  assert.equal(recovered, masterKey);
+  assert.equal(await vault.decryptWithVaultKey(passcode, recovered), 'keep-existing-secret');
+  await assert.rejects(vault.unlockVault('wrong-password', salt, wrapped, verifier), {code: 'VAULT_UNLOCK_FAILED'});
+  const changed = await vault.rewrapVaultCredentials(password, 'replacement-password', {passwordSalt:salt,passwordWrappedVaultKey:wrapped,verifier});
+  assert.equal(await vault.unlockVault('replacement-password', changed.passwordSalt, changed.passwordWrappedVaultKey, changed.verifier), masterKey);
+});
+
+test('new Android salts are normalized before deriving and submitting credentials', async () => {
+  const androidVault = {};
+  new Function('require', 'exports', compiled)(() => ({
+    ...encryption,
+    getRandomBytes: async size => (await encryption.getRandomBytes(size)) + '\n',
+  }), androidVault);
+  const credentials = await androidVault.createVaultCredentials('android-new-password');
+  assert.equal(credentials.salt, credentials.salt.trim());
+  assert.equal(await vault.unlockVault('android-new-password', credentials.salt.trim(), credentials.passwordWrappedVaultKey, credentials.verifier), credentials.masterVaultKey);
+});

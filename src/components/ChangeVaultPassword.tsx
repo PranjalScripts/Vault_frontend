@@ -1,3 +1,4 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import React, { useRef, useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,6 +9,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useSettingsPalette } from "@/hooks/use-settings-palette";
 
 export function ChangeVaultPassword() {
+  const { showSuccess } = useFeedbackModal();
   const baseTheme = useTheme();
   const p = useSettingsPalette();
   const theme = { ...baseTheme, backgroundElement: p.card, text: p.text, textSecondary: p.secondary, accent: p.accent, accentMuted: p.mint, border: p.border };
@@ -21,7 +23,6 @@ export function ChangeVaultPassword() {
   const [focused, setFocused] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
   const submitting = useRef(false);
   const clear = () => { setCurrentPassword(""); setNewPassword(""); setConfirmation(""); setVisible({}); setFocused(null); setError(""); };
   const submit = async () => {
@@ -32,10 +33,10 @@ export function ChangeVaultPassword() {
     if (newPassword === currentPassword) { setError("Choose a different password."); return; }
     if (newPassword !== confirmation) { setError("The new passwords do not match."); return; }
     submitting.current = true;
-    setSaving(true); setError(""); setSuccess(false);
+    setSaving(true); setError("");
     try {
       await changePassword(currentPassword, newPassword);
-      clear(); setOpen(false); setSuccess(true);
+      clear(); setOpen(false); showSuccess({ title: "Vault Password Changed", message: "Use your new password next time you unlock your vault." });
     } catch (failure: unknown) {
       const apiError = failure as { response?: { data?: { message?: string } }; message?: string };
       setError(apiError.response?.data?.message || apiError.message || "Unable to change the password. Please try again.");
@@ -49,7 +50,7 @@ export function ChangeVaultPassword() {
 
   return <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
     <Pressable accessibilityRole="button" accessibilityLabel="Change vault password" accessibilityState={{ expanded: open, disabled: saving }} disabled={saving}
-      onPress={() => { clear(); setSuccess(false); setOpen(true); }} style={({ pressed }) => [styles.row, { opacity: pressed ? 0.75 : 1 }]}>
+      onPress={() => { clear();  setOpen(true); }} style={({ pressed }) => [styles.row, { opacity: pressed ? 0.75 : 1 }]}>
       <View style={[styles.icon, { backgroundColor: theme.accentMuted }]}><Feather name="key" size={25} color={theme.accent} /></View>
       <View style={styles.copy}>
         <Text style={[styles.title, { color: theme.text }]}>Change vault password</Text>
@@ -57,7 +58,6 @@ export function ChangeVaultPassword() {
       </View>
       <Feather name="chevron-right" size={20} color={theme.textSecondary} />
     </Pressable>
-    {success && <Text accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.accent }]}>Vault password updated. Use your new password next time you unlock your vault.</Text>}
     <Modal visible={open} animationType="none" presentationStyle="fullScreen" onRequestClose={close}>
       <SafeAreaView style={[styles.screen, { backgroundColor: p.background }]}>
         <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>

@@ -1,3 +1,4 @@
+import { FeedbackModalHost, useDismissFeedback } from "@/contexts/FeedbackModalContext";
 import React from "react";
 import {
   ActivityIndicator,
@@ -198,13 +199,14 @@ export function FormModal({
 }) {
   const t = useTheme();
   const { width } = useWindowDimensions();
+  const dismissFeedback = useDismissFeedback();
   const insets = useSafeAreaInsets();
   return (
     <Modal
       transparent
       visible={visible}
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={() => { if (!dismissFeedback()) onClose(); }}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
@@ -240,7 +242,7 @@ export function FormModal({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    <FeedbackModalHost active={visible} /></Modal>
   );
 }
 export function Empty({

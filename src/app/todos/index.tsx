@@ -1,8 +1,8 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { shadow } from "@/styles/shadow";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   ScrollView,
@@ -51,6 +51,7 @@ type Stats = {
 const initialStats: Stats = { total: 0, completed: 0, pending: 0, dueToday: 0 };
 
 export default function TodosScreen() {
+  const { showSuccess, showError, confirm } = useFeedbackModal();
   const theme = useTheme();
   const dark = useColorScheme() === "dark";
   const { itemId } = useLocalSearchParams<{ itemId?: string }>();
@@ -65,6 +66,7 @@ export default function TodosScreen() {
   const [totalMatches, setTotalMatches] = useState(0);
   const [loading, setLoading] = useState(true);
   const toggleLock = useRef(false);
+  const deleteLock = useRef(false);
   const [updating, setUpdating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
@@ -125,15 +127,12 @@ export default function TodosScreen() {
         setStats(statsResponse.data?.data || initialStats);
       } catch (error) {
         console.log("TODO LOAD ERROR:", error);
-        Alert.alert(
-          "Unable to load tasks",
-          "Please check your connection and try again.",
-        );
+        showError({ title: "Unable to load tasks", message: "Please check your connection and try again." });
       } finally {
         setLoading(false);
       }
     },
-    [query, sort, status, category, itemId, isMobile],
+    [query, sort, status, category, itemId, isMobile, showError],
   );
 
   useFocusEffect(
@@ -149,12 +148,10 @@ export default function TodosScreen() {
       else await createTodo(draft);
       setFormVisible(false);
       setEditingTodo(null);
+      showSuccess({ title: editingTodo ? "Task Updated" : "Task Created", message: editingTodo ? "Your task has been updated successfully." : "Your task has been created successfully." });
       await load(editingTodo ? page : 1);
     } catch (error: any) {
-      Alert.alert(
-        editingTodo ? "Unable to update task" : "Unable to add task",
-        error?.response?.data?.message || "Please check the task details.",
-      );
+      showError({ title: editingTodo ? "Unable to update task" : "Unable to add task", message: error?.response?.data?.message || "Please check the task details." });
     } finally {
       setSaving(false);
     }
@@ -177,12 +174,13 @@ export default function TodosScreen() {
     }));
     try {
       await updateTodo(todo._id, { isCompleted: completed });
+      showSuccess({ title: completed ? "Task Completed" : "Task Reopened", message: completed ? "Your task has been marked as completed." : "Your task has been marked as pending." });
       if (status !== "all" || isMobile) await load(page);
     } catch {
       setTodos(current => current.map(item => item._id === todo._id ? todo : item));
       setStats(current => ({ ...current, completed: current.completed - (completed ? 1 : -1), pending: current.pending - (completed ? -1 : 1) }));
       await load(page);
-      Alert.alert("Unable to update task", "Please try again.");
+      showError({ title: "Unable to update task", message: "Please try again." });
     } finally {
       toggleLock.current = false;
       setUpdating(false);
@@ -190,21 +188,18 @@ export default function TodosScreen() {
   };
 
   const removeTodo = async (id: string) => {
-    const perform = async () => {
-      try {
-        await deleteTodo(id);
-        await load(page);
-      } catch {
-        Alert.alert("Unable to delete task", "Please try again.");
-      }
-    };
-    if (Platform.OS === "web") {
-      if (window.confirm("Delete this task?")) await perform();
-    } else
-      Alert.alert("Delete task", "This task will be permanently deleted.", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: perform },
-      ]);
+    if (deleteLock.current) return;
+    deleteLock.current = true;
+    try {
+      if (!(await confirm({ title: "Delete Task?", message: "Are you sure you want to delete this task? This action cannot be undone." }))) return;
+      await deleteTodo(id);
+      showSuccess({ title: "Task Deleted", message: "The task has been deleted successfully." });
+      await load(page);
+    } catch {
+      showError({ title: "Unable to delete task", message: "Please try again." });
+    } finally {
+      deleteLock.current = false;
+    }
   };
 
   const statCards = useMemo(

@@ -1,3 +1,4 @@
+import { FeedbackModalProvider } from "@/contexts/FeedbackModalContext";
 import { VaultProvider } from "@/contexts/vaultContext";
 import NoDataConnection from "@/components/NoDataConnection";
 import NotificationObserver from "@/components/NotificationObserver";
@@ -27,7 +28,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
 import { useThemePreferenceReady } from "@/state/theme-preference";
-const PROTECTED_ROUTES = ["subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games"];
+const PROTECTED_ROUTES = ["interview", "subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games"];
 
 // Google redirects to the origin on web, so completion must run on every route.
 // Expo validates the stored redirect URL; AuthSession validates OAuth state.
@@ -208,6 +209,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={navigationTheme}>
       <VaultProvider>
+      <FeedbackModalProvider>
         <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         <View style={{ flex: 1, backgroundColor: theme.background }} onLayout={() => setRootLaidOut(true)}>
         <View style={{ flex: 1, opacity: routeReady ? 1 : 0 }} pointerEvents={routeReady ? "auto" : "none"}>
@@ -305,6 +307,12 @@ export default function RootLayout() {
               OTHER SCREENS
               ================================================= */}
 
+          <Stack.Screen name="interview/index" options={{ headerShown: false, title: "Interview Prep" }} />
+          <Stack.Screen name="interview/[subject]/index" options={{ headerShown: false, title: "Interview Subject" }} />
+          <Stack.Screen name="interview/[subject]/[topic]" options={{ headerShown: false, title: "Interview Topic" }} />
+          <Stack.Screen name="interview/question/[id]" options={{ headerShown: false, title: "Interview Question" }} />
+          <Stack.Screen name="puzzles/index" options={{ headerShown: false, title: "Puzzles" }} />
+          <Stack.Screen name="puzzles/[id]" options={{ headerShown: false, title: "Puzzle", presentation: "card" }} />
           <Stack.Screen name="games/puzzles/[id]" options={{ headerShown: false, title: "Puzzles", presentation: "card" }} />
           <Stack.Screen name="games/index" options={{ headerShown: false, title: "Games" }} />
           <Stack.Screen name="games/tap-clash" options={{ headerShown: false, title: "Tap Clash" }} />
@@ -339,6 +347,7 @@ export default function RootLayout() {
         <Toast />
         <NotificationObserver ready={isReady && isAuthenticated && startupComplete && !!navigationState?.key && !redirectTarget} />
         <NoDataConnection />
+      </FeedbackModalProvider>
       </VaultProvider>
     </ThemeProvider>
   );

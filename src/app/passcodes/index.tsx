@@ -1,3 +1,4 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { useTheme } from "@/hooks/use-theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import React, {
@@ -10,7 +11,6 @@ import React, {
 import { Pressable, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import Feather from "@expo/vector-icons/Feather";
-import Toast from "react-native-toast-message";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { Button } from "@/components/subjects/SubjectUI";
@@ -50,6 +50,7 @@ const DEFAULT_PAGE_SIZE = 20;
 // =====================================================
 
 export default function PasscodesScreen() {
+  const { showSuccess, showError, showInfo } = useFeedbackModal();
   const theme = useTheme();
   const dark = useColorScheme() === "dark";
   const [category, setCategory] = useState<Category>("All");
@@ -323,16 +324,12 @@ export default function PasscodesScreen() {
           return;
         }
 
-        Toast.show({
-          type: "error",
-          text1: "Unable to load passcodes",
-          text2: error?.message || "Please try again.",
-        });
+        showError({ title: "Unable to load passcodes", message: error?.message || "Please try again." });
       } finally {
         setLoading(false);
       }
     },
-    [decryptPasscode, isVaultCreated, isVaultUnlocked, vaultKey, itemId],
+    [decryptPasscode, isVaultCreated, isVaultUnlocked, vaultKey, itemId, showError],
   );
 
   // =====================================================
@@ -478,11 +475,7 @@ export default function PasscodesScreen() {
 
       setVaultError("");
 
-      Toast.show({
-        type: "success",
-        text1: "Vault created",
-        text2: "Your vault is ready. You can now save passcodes.",
-      });
+      showSuccess({ title: "Vault created", message: "Your vault is ready. You can now save passcodes." });
     } catch (error: any) {
       console.log("CREATE VAULT ERROR:", error);
 
@@ -532,11 +525,7 @@ export default function PasscodesScreen() {
 
       setVaultError("");
 
-      Toast.show({
-        type: "success",
-        text1: "Vault unlocked",
-        text2: "Your saved credentials are now available.",
-      });
+
     } catch (error: any) {
       setVaultError(error?.message || "Unable to unlock vault.");
     } finally {
@@ -621,11 +610,7 @@ export default function PasscodesScreen() {
 
   const handleCreate = async () => {
     if (!platform.trim() || !username.trim() || !password) {
-      Toast.show({
-        type: "info",
-        text1: "Missing fields",
-        text2: "Please enter platform, username and password.",
-      });
+      showError({ title: "Missing fields", message: "Please enter platform, username and password." });
 
       return;
     }
@@ -634,11 +619,7 @@ export default function PasscodesScreen() {
      * Vault state check
      */
     if (isVaultLoading) {
-      Toast.show({
-        type: "info",
-        text1: "Please wait",
-        text2: "Checking vault status...",
-      });
+      showInfo({ title: "Please wait", message: "Checking vault status..." });
 
       return;
     }
@@ -678,22 +659,13 @@ export default function PasscodesScreen() {
 
       await fetchPage(1, pageSize, search, sortOption);
 
-      Toast.show({
-        type: "success",
-        text1: "Passcode saved",
-        text2: `${savedPlatform} was added successfully.`,
-      });
+      showSuccess({ title: "Passcode saved", message: `${savedPlatform} was added successfully.` });
     } catch (error: any) {
       console.log("CREATE PASSCODE ERROR:", error);
 
-      Toast.show({
-        type: "error",
-        text1: "Save failed",
-        text2:
-          error?.response?.data?.message ||
+      showError({ title: "Save failed", message: error?.response?.data?.message ||
           error?.message ||
-          "Unable to save passcode.",
-      });
+          "Unable to save passcode." });
     } finally {
       setCreating(false);
     }
@@ -726,11 +698,7 @@ export default function PasscodesScreen() {
     }
 
     if (!editUsername.trim() || !editPassword.trim()) {
-      Toast.show({
-        type: "info",
-        text1: "Missing fields",
-        text2: "Username and password are required.",
-      });
+      showError({ title: "Missing fields", message: "Username and password are required." });
 
       return;
     }
@@ -746,11 +714,7 @@ export default function PasscodesScreen() {
       return;
     }
     if (!isVaultCreated || !isVaultUnlocked || !vaultKey) {
-      Toast.show({
-        type: "info",
-        text1: "Vault is locked",
-        text2: "Unlock your vault before updating a passcode.",
-      });
+      showError({ title: "Vault is locked", message: "Unlock your vault before updating a passcode." });
       return;
     }
 
@@ -775,19 +739,11 @@ export default function PasscodesScreen() {
       setEditUsername("");
       setEditPassword("");
 
-      Toast.show({
-        type: "success",
-        text1: "Passcode updated",
-        text2: "Your credentials updated successfully.",
-      });
+      showSuccess({ title: "Passcode updated", message: "Your credentials updated successfully." });
     } catch (error: any) {
       console.log("UPDATE PASSCODE ERROR:", error);
 
-      Toast.show({
-        type: "error",
-        text1: "Update failed",
-        text2: error?.message || "Unable to update passcode.",
-      });
+      showError({ title: "Update failed", message: error?.message || "Unable to update passcode." });
     } finally {
       setUpdating(false);
     }
@@ -823,19 +779,12 @@ export default function PasscodesScreen() {
 
       await fetchPage(targetPage, pageSize, search, sortOption);
 
-      Toast.show({
-        type: "success",
-        text1: "Passcode deleted",
-        text2: "The passcode was removed successfully.",
-      });
+      showSuccess({ title: "Passcode deleted", message: "The passcode was removed successfully." });
     } catch (error: any) {
+      setDeleteConfirmId(null);
       console.log("DELETE PASSCODE ERROR:", error?.response?.data || error);
 
-      Toast.show({
-        type: "error",
-        text1: "Delete failed",
-        text2: error?.response?.data?.message || "Unable to delete passcode.",
-      });
+      showError({ title: "Delete failed", message: error?.response?.data?.message || "Unable to delete passcode." });
     } finally {
       setDeleting(false);
     }
@@ -861,7 +810,7 @@ export default function PasscodesScreen() {
 
   const selectedPasscode = passcodes.find(item => item._id === selectedId);
   const showingDetails = !!selectedPasscode && isVaultUnlocked && !!vaultKey;
-  const activeOperation = showForgotPasswordModal ? 'recovery' : showVaultModal ? 'unlock' : deleteConfirmId ? 'delete' : editingPasscode ? 'edit' : showForm ? 'add' : null;
+  const activeOperation = showForgotPasswordModal ? 'recovery' : showVaultModal ? 'unlock' : editingPasscode ? 'edit' : showForm ? 'add' : null;
   const activeView = activeOperation || (showingDetails ? 'details' : 'list');
   const operationBusy = creating || updating || deleting || unlocking || creatingVault;
   const managementModals = <PasscodeModals
@@ -874,7 +823,7 @@ export default function PasscodesScreen() {
             setEditPassword={setEditPassword}
             updating={updating}
             handleUpdate={handleUpdate}
-            deleteConfirmId={activeOperation === "delete" ? deleteConfirmId : null}
+            deleteConfirmId={deleteConfirmId}
             setDeleteConfirmId={setDeleteConfirmId}
             deleting={deleting}
             confirmDelete={confirmDelete}
@@ -884,22 +833,34 @@ export default function PasscodesScreen() {
     <AppLayout
       key={activeView}
       mobileTitle="Passcodes"
-      mobileSubtitle="Manage all your accounts in one place."
+      mobileSubtitle="end-to-end encrypted and secure"
       themeOverride={theme}
       contentBackgroundColor={theme.background}
       mobileHeaderActions={
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add passcode"
-          disabled={isVaultLoading || operationBusy || activeOperation === "recovery"}
+          disabled={
+            isVaultLoading || operationBusy || activeOperation === "recovery"
+          }
           onPress={() => {
             setEditingPasscode(null);
             setDeleteConfirmId(null);
             setShowForm(false);
-            if (!isVaultCreated || !isVaultUnlocked || !vaultKey) openVaultModal();
+            if (!isVaultCreated || !isVaultUnlocked || !vaultKey)
+              openVaultModal();
             else setShowForm(true);
           }}
-          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: isVaultLoading || operationBusy || activeOperation === "recovery" ? 0.5 : 1 }}
+          style={{
+            width: 44,
+            height: 44,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity:
+              isVaultLoading || operationBusy || activeOperation === "recovery"
+                ? 0.5
+                : 1,
+          }}
         >
           <Feather name="plus" size={27} color={theme.accent} />
         </Pressable>
@@ -912,38 +873,64 @@ export default function PasscodesScreen() {
           flex: 1,
         }}
       >
-        <View style={[styles.container, { maxWidth: 900, width: "100%", alignSelf: "center" }]}>
-          {!activeOperation && (showingDetails && selectedPasscode ? <PasscodeDetails key={selectedPasscode._id} item={selectedPasscode} onClose={() => setSelectedId(null)} onEdit={handleEdit} onDelete={handleDelete} onCopy={copyToClipboard} copiedField={copiedField} /> : <>
-          {!!itemId && <Button label="Show all passcodes" secondary onPress={() => { router.setParams({ itemId: "" }); setSearch(""); }} />}
-          <PasscodesHeader
-            passcodes={passcodes}
-            category={category}
-            setCategory={setCategory}
-            theme={theme}
-            isVaultLoading={isVaultLoading}
-            isVaultCreated={isVaultCreated}
-            isVaultUnlocked={isVaultUnlocked}
-            vaultKey={vaultKey}
-            openVaultModal={openVaultModal}
-            setShowForm={setShowForm}
-            search={search}
-            setSearch={setSearch}
-            sortLabel={sortLabel}
-            showSortOptions={showSortOptions}
-            setShowSortOptions={setShowSortOptions}
-            sortOption={sortOption}
-            setSortOption={setSortOption}
-            fetchPage={fetchPage}
-            pageSize={pageSize}
-            loading={loading}
-            totalRecords={totalRecords}
-            hasPreviousPage={hasPreviousPage}
-            hasNextPage={hasNextPage}
-            goToPreviousPage={goToPreviousPage}
-            goToNextPage={goToNextPage}
-          />
-
-          </>)}
+        <View
+          style={[
+            styles.container,
+            { maxWidth: 900, width: "100%", alignSelf: "center" },
+          ]}
+        >
+          {!activeOperation &&
+            (showingDetails && selectedPasscode ? (
+              <PasscodeDetails
+                key={selectedPasscode._id}
+                item={selectedPasscode}
+                onClose={() => setSelectedId(null)}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onCopy={copyToClipboard}
+                copiedField={copiedField}
+              />
+            ) : (
+              <>
+                {!!itemId && (
+                  <Button
+                    label="Show all passcodes"
+                    secondary
+                    onPress={() => {
+                      router.setParams({ itemId: "" });
+                      setSearch("");
+                    }}
+                  />
+                )}
+                <PasscodesHeader
+                  passcodes={passcodes}
+                  category={category}
+                  setCategory={setCategory}
+                  theme={theme}
+                  isVaultLoading={isVaultLoading}
+                  isVaultCreated={isVaultCreated}
+                  isVaultUnlocked={isVaultUnlocked}
+                  vaultKey={vaultKey}
+                  openVaultModal={openVaultModal}
+                  setShowForm={setShowForm}
+                  search={search}
+                  setSearch={setSearch}
+                  sortLabel={sortLabel}
+                  showSortOptions={showSortOptions}
+                  setShowSortOptions={setShowSortOptions}
+                  sortOption={sortOption}
+                  setSortOption={setSortOption}
+                  fetchPage={fetchPage}
+                  pageSize={pageSize}
+                  loading={loading}
+                  totalRecords={totalRecords}
+                  hasPreviousPage={hasPreviousPage}
+                  hasNextPage={hasNextPage}
+                  goToPreviousPage={goToPreviousPage}
+                  goToNextPage={goToNextPage}
+                />
+              </>
+            ))}
 
           <PasscodeForm
             showForm={activeOperation === "add"}
@@ -958,17 +945,22 @@ export default function PasscodesScreen() {
             creating={creating}
             handleCreate={handleCreate}
           />
-          {!activeOperation && !showingDetails && <VaultStateView
-            theme={theme}
-            isVaultLoading={isVaultLoading}
-            isVaultCreated={isVaultCreated}
-            isVaultUnlocked={isVaultUnlocked}
-            loading={loading}
-            passcodes={passcodes.filter(item => category === "All" || entryCategory(item) === category)}
-            search={search || (category !== "All" ? category : "")}
-            openVaultModal={openVaultModal}
-            renderPasscode={renderPasscode}
-          />}
+          {!activeOperation && !showingDetails && (
+            <VaultStateView
+              theme={theme}
+              isVaultLoading={isVaultLoading}
+              isVaultCreated={isVaultCreated}
+              isVaultUnlocked={isVaultUnlocked}
+              loading={loading}
+              passcodes={passcodes.filter(
+                (item) =>
+                  category === "All" || entryCategory(item) === category,
+              )}
+              search={search || (category !== "All" ? category : "")}
+              openVaultModal={openVaultModal}
+              renderPasscode={renderPasscode}
+            />
+          )}
 
           <VaultModal
             showVaultModal={activeOperation === "unlock"}
@@ -1001,7 +993,6 @@ export default function PasscodesScreen() {
             }}
           />
           {managementModals}
-
         </View>
       </View>
     </AppLayout>

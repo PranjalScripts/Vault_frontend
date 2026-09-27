@@ -1,3 +1,4 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import React, { useState, useEffect, useRef } from "react";
 
 import {
@@ -58,6 +59,7 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
   // STATE
   // =======================================================
 
+  const { showSuccess } = useFeedbackModal();
   const [step, setStep] = useState<RecoveryStep>("confirm");
 
   const [loading, setLoading] = useState(false);
@@ -296,6 +298,7 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
       resetRecovery();
       onClose?.();
       onSuccess?.(masterKey);
+      showSuccess({ title: "Vault Password Reset", message: "Your new vault password has been saved successfully." });
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
@@ -373,7 +376,7 @@ const ForgotVaultPasswordModal: React.FC<ForgotVaultPasswordModalProps> = ({
   // =======================================================
 
   return (
-    <PasscodeEditorShell visible={visible} title={step === 'otp' ? 'Verify OTP' : step === 'password' ? 'Reset Vault Password' : 'Recover Vault'} onClose={handleClose} busy={loading}>
+    <PasscodeEditorShell visible={visible} onClose={handleClose} busy={loading}>
           <View
             style={[
               styles.container,

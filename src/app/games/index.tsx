@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Feather from "@expo/vector-icons/Feather";
-import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
-import { PuzzleSection } from "@/features/puzzles/PuzzleSection";
 import { AppLayout } from "@/components/AppLayout";
 import {
   GameArt,
@@ -12,7 +10,7 @@ import {
   useGameTheme,
 } from "@/features/games/GameUI";
 
-const filters = ["All", "Single Player", "Multiplayer", "Puzzles"] as const;
+const filters = ["All", "Single Player", "Multiplayer"] as const;
 const games = [
   {
     kind: "path" as GameKind,
@@ -218,10 +216,6 @@ export default function GamesScreen() {
               </Pressable>
             );
           })}
-        {(filter === "Puzzles") && <PuzzleSection key={filter} categorized={filter === "Puzzles"} />}
-        {filter !== "Puzzles" && <>
-
-        </>}
       </View>
     </AppLayout>
   );

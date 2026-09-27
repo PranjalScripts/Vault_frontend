@@ -1,3 +1,4 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import {
   getTodos,
   createTodo,
@@ -9,6 +10,7 @@ import { FilterType, Todo, PAGE_SIZE } from "@/features/todos/features/types";
 import { TodosState } from "@/features/todos/features/useTodosState";
 
 export function useTodosActions(state: TodosState) {
+  const { showSuccess, showError } = useFeedbackModal();
   const {
     todos,
     setTodos,
@@ -149,10 +151,12 @@ export function useTodosActions(state: TodosState) {
       await createTodo({ title: text });
 
       setTitle("");
+      showSuccess({ title: "Task Created", message: "Your task has been created successfully." });
 
       await fetchPage(page, filter);
     } catch (error) {
       console.log("CREATE TODO ERROR:", error);
+      showError({ title: "Action Failed", message: "Unable to create task." });
     } finally {
       setCreating(false);
     }
@@ -171,6 +175,7 @@ export function useTodosActions(state: TodosState) {
       });
 
       const updatedTodo: Todo = response.data.data;
+      showSuccess({ title: updatedTodo.isCompleted ? "Task Completed" : "Task Reopened", message: "Your task status has been saved." });
 
       /*
        * Completed/Pending filters
@@ -190,6 +195,7 @@ export function useTodosActions(state: TodosState) {
       );
     } catch (error) {
       console.log("UPDATE TODO ERROR:", error);
+      showError({ title: "Action Failed", message: "Unable to update task." });
     }
   };
 
@@ -242,10 +248,13 @@ export function useTodosActions(state: TodosState) {
 
       setDeleteModalVisible(false);
       setDeleteSingleId(null);
+      showSuccess({ title: "Task Deleted", message: "The task has been deleted successfully." });
 
       await fetchPage(nextPage, filter);
     } catch (error) {
       console.log("DELETE TODO ERROR:", error);
+      setDeleteModalVisible(false);
+      showError({ title: "Action Failed", message: "Unable to delete task." });
     } finally {
       setDeletingMultiple(false);
     }
@@ -307,10 +316,13 @@ export function useTodosActions(state: TodosState) {
       setShowMultipleDelete(false);
       setDeleteModalVisible(false);
       setDeleteType(null);
+      showSuccess({ title: "Tasks Deleted", message: "The selected tasks have been deleted successfully." });
 
       await fetchPage(1, "newest");
     } catch (error) {
       console.log("BULK DELETE ERROR:", error);
+      setDeleteModalVisible(false);
+      showError({ title: "Action Failed", message: "Some tasks could not be deleted. Please refresh and try again." });
     } finally {
       setDeletingMultiple(false);
     }

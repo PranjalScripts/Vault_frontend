@@ -1,3 +1,4 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -28,6 +29,7 @@ function ResourceLink({ label, name, onPress }: { label: string; name?: string; 
 export default function SharedSubjectScreen() {
   const { token, add } = useLocalSearchParams<{ token?: string; add?: string }>();
   const router = useRouter();
+  const { showSuccess } = useFeedbackModal();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
@@ -61,10 +63,11 @@ export default function SharedSubjectScreen() {
     try {
       const response = await importSharedSubject(token);
       router.replace({ pathname: "/subjects/[id]", params: { id: response.data.data.subjectId } });
+      showSuccess({ title: "Subject Added", message: "The shared content has been added to your subjects." });
     } catch (failure) {
       setAddError(isAxiosError(failure) ? failure.response?.data?.message || "Unable to add this content. Please try again." : "Unable to add this content. Please try again.");
     } finally { addingRef.current = false; setAdding(false); }
-  }, [authenticated, content, router, token]);
+  }, [authenticated, content, router, token, showSuccess]);
   useEffect(() => {
     if (add === "1" && authenticated && content && token && attempted.current !== token) {
       attempted.current = token;

@@ -11,13 +11,13 @@ import { useVault } from "@/contexts/vaultContext";
 
 import { topicResources, primaryResource, type SearchResource } from "@/utils/searchResources";
 
-type Kind = "todo" | "subject" | "topic" | "notes" | "passcode";
+type Kind = "todo" | "subject" | "topic" | "notes" | "passcode" | "puzzle";
 type Result = { id: string; kind: Kind; title: string; excerpt: string; subjectId?: string; parentTitle?: string; url?: string; files?: { fileName: string; fileUrl: string }[] };
 type SearchData = { data: Result[]; counts: Record<Kind, number>; pagination: { total: number; totalPages: number; hasNextPage: boolean } };
-const icons: Record<Kind, React.ComponentProps<typeof Feather>["name"]> = { todo: "check-square", subject: "book", topic: "book-open", notes: "file-text", passcode: "lock" };
-const descriptions: Record<Kind, string> = { subject: "Courses and collections", topic: "Topics, links and attachments", notes: "Ideas and saved notes", todo: "Tasks and descriptions", passcode: "Platforms in your vault" };
-const kinds: Kind[] = ["subject", "topic", "notes", "todo", "passcode"];
-const labels: Record<Kind, string> = { todo: "Todos", subject: "Subjects", topic: "Topics & resources", notes: "Notes", passcode: "Passcodes" };
+const icons: Record<Kind, React.ComponentProps<typeof Feather>["name"]> = { todo: "check-square", subject: "book", topic: "book-open", notes: "file-text", puzzle: "help-circle", passcode: "lock" };
+const descriptions: Record<Kind, string> = { subject: "Courses and collections", topic: "Topics, links and attachments", notes: "Ideas and saved notes", todo: "Tasks and descriptions", puzzle: "Questions, categories and difficulty", passcode: "Platforms in your vault" };
+const kinds: Kind[] = ["subject", "topic", "notes", "todo", "passcode", "puzzle"];
+const labels: Record<Kind, string> = { todo: "Todos", subject: "Subjects", topic: "Topics & resources", notes: "Notes", puzzle: "Puzzles", passcode: "Passcodes" };
 export default function UniversalSearchScreen() {
   const params = useLocalSearchParams<{ q?: string; kind?: string; page?: string }>();
   const theme = useTheme();
@@ -92,6 +92,7 @@ export default function UniversalSearchScreen() {
     }
     else if (item.kind === "notes") router.push({ pathname: "/subjects/[id]", params: { id: item.subjectId!, section: "notes" } });
     else if (item.kind === "todo") router.push({ pathname: "/todos", params: { itemId: item.id } });
+    else if (item.kind === "puzzle") router.push({ pathname: "/puzzles/[id]", params: { id: item.id } });
     else if (isVaultUnlocked) router.push({ pathname: "/passcodes", params: { itemId: item.id } });
   };
   const locked = kind === "passcode" && !isVaultUnlocked;

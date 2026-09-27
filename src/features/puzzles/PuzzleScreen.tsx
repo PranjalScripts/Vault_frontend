@@ -27,10 +27,10 @@ function PuzzleDetail({ puzzle }: { puzzle?: Puzzle }) {
   const next = puzzles[index + 1];
   return <PuzzleFrame authenticated={access.authenticated === true}>
     <View testID="puzzle-detail" style={{ width: '100%', maxWidth: 720, paddingHorizontal: 16, alignSelf: 'center', gap: 16, paddingBottom: 20 }}>
-      <GameBack backLabel={access.authenticated ? 'Back to Games' : 'Back to Vault'} onPress={() => router.replace(access.authenticated ? '/games' : '/')} />
+      <GameBack backLabel={'Back to Puzzles'} onPress={() => router.replace('/puzzles')} />
       {!puzzle ? <>
         <Text accessibilityRole="header" style={heading}>Puzzle not found</Text>
-        <Text style={textStyle}>Return to Games to choose one of the available puzzles.</Text>
+        <Text style={textStyle}>Return to Puzzles to choose one of the available puzzles.</Text>
       </> : <>
         <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>{puzzle.category} · {puzzle.difficulty} · {index + 1} of {puzzles.length}</Text>
         <Text accessibilityRole="header" style={{ color: theme.text, fontSize: 28, fontWeight: '800' }}>{puzzle.title}</Text>
@@ -59,13 +59,13 @@ function PuzzleDetail({ puzzle }: { puzzle?: Puzzle }) {
           </View>)}
           {!!answer.keyIdea && <View style={{ borderLeftWidth: 3, borderColor: theme.accent, paddingLeft: 14, gap: 8 }}><Text accessibilityRole="header" style={heading}>Key idea</Text><Text selectable style={textStyle}>{answer.keyIdea}</Text></View>}
         </View>}
-        {next && <Pressable accessibilityRole="button" onPress={() => router.replace({ pathname: '/games/puzzles/[id]', params: { id: next.id } })} style={{ minHeight: 48, paddingVertical: 12, justifyContent: 'center' }}><Text style={{ color: theme.accent, fontSize: 14, fontWeight: '700' }}>Next: {next.title} →</Text></Pressable>}
+        {next && <Pressable accessibilityRole="button" onPress={() => router.replace({ pathname: '/puzzles/[id]', params: { id: next.id } })} style={{ minHeight: 48, paddingVertical: 12, justifyContent: 'center' }}><Text style={{ color: theme.accent, fontSize: 14, fontWeight: '700' }}>Next: {next.title} →</Text></Pressable>}
       </>}
     </View>
   </PuzzleFrame>;
 }
 
-function PuzzleFrame({ authenticated, children }: { authenticated: boolean; children: React.ReactNode }) {
+export function PuzzleFrame({ authenticated, children }: { authenticated: boolean; children: React.ReactNode }) {
   const theme = useGameTheme();
   if (authenticated) return <AppLayout mobileTitle="Puzzles" themeOverride={theme}>{children}</AppLayout>;
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>

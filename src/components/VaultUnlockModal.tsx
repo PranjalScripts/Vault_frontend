@@ -1,8 +1,8 @@
+import { useFeedbackModal, FeedbackModalHost, useDismissFeedback } from "@/contexts/FeedbackModalContext";
 import React, { useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   StyleSheet,
   Text,
@@ -46,6 +46,9 @@ const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
   // UNLOCK VAULT
   // ===================================================
 
+  const { showError } = useFeedbackModal();
+
+  const dismissFeedback = useDismissFeedback();
   const handleUnlockVault = async () => {
     if (loading) return;
     // -----------------------------------------------
@@ -53,7 +56,7 @@ const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
     // -----------------------------------------------
 
     if (!password.trim()) {
-      Alert.alert("Vault Password", "Please enter your vault password.");
+      showError({ title: "Vault Password", message: "Please enter your vault password." });
 
       return;
     }
@@ -103,15 +106,9 @@ const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
       // WRONG PASSWORD
       // -----------------------------------------------
 
-      Alert.alert(
-        "Incorrect Password",
-        "The vault password you entered is incorrect.",
-      );
+      showError({ title: "Incorrect Password", message: "The vault password you entered is incorrect." });
     } catch (error: any) {
-      Alert.alert(
-        "Unable to Unlock Vault",
-        error?.message || "Unable to unlock your vault. Please try again.",
-      );
+      showError({ title: "Unable to Unlock Vault", message: error?.message || "Unable to unlock your vault. Please try again." });
     } finally {
       setLoading(false);
     }
@@ -142,7 +139,7 @@ const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
         visible={visible}
         transparent
         animationType="fade"
-        onRequestClose={handleClose}
+        onRequestClose={() => { if (!dismissFeedback()) handleClose(); }}
       >
         <View style={styles.overlay}>
           <View style={styles.container}>
@@ -251,7 +248,7 @@ const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
             )}
           </View>
         </View>
-      </Modal>
+      <FeedbackModalHost active={visible} /></Modal>
 
       {/* =========================================================
         FORGOT PASSWORD MODAL

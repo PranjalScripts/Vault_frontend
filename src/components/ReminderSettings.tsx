@@ -1,5 +1,6 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { useEffect, useState } from "react";
-import { Alert, AppState, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { useSettingsPalette } from "@/hooks/use-settings-palette";
 import { defaultPreferences, getReminderScheduleStatus, subscribeToReminderSchedule, mobileNotifications, readReminderPreferences, ReminderPreferences, saveReminderPreferences } from "@/notifications/reminders";
@@ -11,6 +12,7 @@ const frequencies = [
 ] as const;
 
 export default function ReminderSettings() {
+  const { showSuccess, showError, showInfo } = useFeedbackModal();
   const p = useSettingsPalette();
   const [preferences, setPreferences] = useState(defaultPreferences);
   const [busy, setBusy] = useState(mobileNotifications);
@@ -31,17 +33,17 @@ export default function ReminderSettings() {
     if (!mobileNotifications) return;
     let active = true;
     readReminderPreferences().then(value => { if (active) setPreferences(value); })
-      .catch(() => Alert.alert("Reminders", "Could not load reminder settings."))
+      .catch(() => showError({ title: "Reminders", message: "Could not load reminder settings." }))
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, []);
+  }, [showError]);
 
   const save = async (patch: Partial<ReminderPreferences>) => {
-    if (busy) return;
+    if (busy || Object.entries(patch).every(([key, value]) => preferences[key as keyof ReminderPreferences] === value)) return;
     setBusy(true);
     const next = { ...preferences, ...patch };
-    try { await saveReminderPreferences(next); setPreferences(next); }
-    catch (error) { Alert.alert("Could not save reminders", error instanceof Error ? error.message : "Please try again."); }
+    try { await saveReminderPreferences(next); setPreferences(next); showSuccess({ title: "Reminders Saved", message: "Your reminder preferences have been updated." }); }
+    catch (error) { showError({ title: "Could not save reminders", message: error instanceof Error ? error.message : "Please try again." }); }
     finally { setBusy(false); }
   };
   const disabled = busy || !preferences.enabled || !mobileNotifications;
@@ -76,7 +78,7 @@ export default function ReminderSettings() {
         <Text style={[styles.frequencyText, { color: preferences.intervalMinutes === minutes ? p.card : p.secondary }]}>{value} {minutes === 1 ? 'min' : unit}</Text>
       </Pressable>)}</View>
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel="Next reminders, view schedule details" onPress={() => Alert.alert('Next reminders', scheduleStatus + '\n\nScheduled on your phone, even offline. Open Vault regularly to keep reminders going. Open an unfinished subject to start study reminders. Completed items stop; reminders may arrive overnight.')}
+    <Pressable accessibilityRole="button" accessibilityLabel="Next reminders, view schedule details" onPress={() => showInfo({ title: 'Next reminders', message: scheduleStatus + '\n\nScheduled on your phone, even offline. Open Vault regularly to keep reminders going. Open an unfinished subject to start study reminders. Completed items stop; reminders may arrive overnight.' })}
       style={[styles.schedule, { backgroundColor: p.inset }]}>
       <View style={[styles.calendar, { backgroundColor: p.mint }]}><Feather name="calendar" size={21} color={p.accent} /></View>
       <View style={styles.copy}><Text style={[styles.label, { color: p.text }]}>Next reminders</Text><Text numberOfLines={2} accessibilityLiveRegion="polite" style={[styles.detail, { color: p.secondary }]}>{summary}</Text></View>

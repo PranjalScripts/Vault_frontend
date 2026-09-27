@@ -1,8 +1,8 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 
 import React, { useCallback, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -19,6 +19,7 @@ import { useTheme } from "@/hooks/use-theme";
 
 
 export default function OnboardingScreen() {
+  const { showError } = useFeedbackModal();
   const router = useRouter();
   const { shareToken, puzzleId } = useLocalSearchParams<{ shareToken?: string; puzzleId?: string }>();
   const returnToPuzzle = typeof puzzleId === "string" && getPuzzleById(puzzleId) ? puzzleId : null;
@@ -66,7 +67,7 @@ export default function OnboardingScreen() {
       await saveAuthToken(token, user);
 
       if (returnToShare) router.replace({ pathname: "/share", params: { token: returnToShare, add: "1" } });
-      else if (returnToPuzzle) router.replace({ pathname: "/games/puzzles/[id]", params: { id: returnToPuzzle } });
+      else if (returnToPuzzle) router.replace({ pathname: "/puzzles/[id]", params: { id: returnToPuzzle } });
       else router.replace("/dashboard");
     } catch (error: any) {
       setLoginError(error?.response?.data?.message || error?.message || "Sign-in failed. Please try again.");
@@ -121,10 +122,7 @@ export default function OnboardingScreen() {
         const idToken = signInResult.data?.idToken;
 
         if (!idToken) {
-          Alert.alert(
-            "Sign-in failed",
-            "Google did not return an ID token.",
-          );
+          showError({ title: "Sign-in failed", message: "Google did not return an ID token." });
           setIsLoading(false);
           return;
         }
@@ -141,10 +139,7 @@ export default function OnboardingScreen() {
        */
       if (Platform.OS === "web") {
         if (!request) {
-          Alert.alert(
-            "Sign-in unavailable",
-            "Google authentication is not ready yet.",
-          );
+          showError({ title: "Sign-in unavailable", message: "Google authentication is not ready yet." });
           setIsLoading(false);
           return;
         }

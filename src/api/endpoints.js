@@ -63,8 +63,8 @@ export const updateTodo = (todoId, todoData) =>
 
 export const deleteTodo = (todoId) => API.delete(`/todos/${todoId}`);
 
-export const getVault = () => API.get("/vault");
-export const getFreshVault = () => forceRefresh("/vault");
+export const getVault = () => API.get("/vault", { cache: false, headers: { "Cache-Control": "no-cache" } });
+export const getFreshVault = () => forceRefresh("/vault", { cache: false, headers: { "Cache-Control": "no-cache" } });
 export const changeVaultPassword = ({ previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier }) =>
   API.put("/vault/password", { previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier });
 

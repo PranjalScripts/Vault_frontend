@@ -1,3 +1,4 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { shadow } from "@/styles/shadow";
 import React from "react";
 import { NavigationIcon } from "./NavigationIcon";
@@ -13,8 +14,7 @@ import {
   Animated,
   Easing,
   Image,
-  Alert,
-} from "react-native";
+  } from "react-native";
 import { useRouter, usePathname, useFocusEffect } from "expo-router";
 import { useTheme } from "@/hooks/use-theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -58,6 +58,7 @@ export function AppLayout({
   immersive?: boolean;
 }) {
   const { width } = useWindowDimensions();
+  const { showError } = useFeedbackModal();
   const baseTheme = useTheme();
   const theme = themeOverride ?? baseTheme;
   const dark = useColorScheme() === "dark";
@@ -176,7 +177,9 @@ export function AppLayout({
       path: "/passcodes",
     },
 
+    { name: "Interview Prep", path: "/interview" },
     { name: "Games", path: "/games" },
+    { name: "Puzzles", path: "/puzzles" },
     { name: "WhatsApp", path: "/whatsapp" },
     { name: "Recently Deleted", path: "/trash" },
     { name: "Settings", path: "/settings" },
@@ -248,7 +251,7 @@ export function AppLayout({
       router.replace("/");
     } catch (error) {
       console.error("❌ Logout error:", error);
-      Alert.alert("Could not sign out", "Vault could not clear this phone’s local reminders. Please try signing out again.");
+      showError({ title: "Could not sign out", message: "Vault could not clear this phone’s local reminders. Please try signing out again." });
     }
   };
 

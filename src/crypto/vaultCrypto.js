@@ -101,7 +101,9 @@ export const generateVaultSalt = async () => {
       throw new Error("Unable to generate vault salt");
     }
 
-    return salt;
+    // Android Base64.DEFAULT adds a trailing LF. The backend trims salts,
+    // so normalize before BOTH key derivation and persistence.
+    return salt.trim();
   } catch (error) {
     console.error("VAULT SALT GENERATION ERROR:", error);
 
@@ -393,43 +395,26 @@ export const unlockVault = async (
     throw new Error("Vault verifier is required");
   }
 
-  try {
-    // -----------------------------------------------------
-    // 1. Derive Vault Key
-    // -----------------------------------------------------
-
-    const vaultKey = await deriveVaultKey(password, salt);
-
-    // -----------------------------------------------------
-    // 2. Decrypt verifier and wrapped master key
-    // -----------------------------------------------------
-
-    const decryptedVerifier = await decryptWithVaultKey(verifier, vaultKey);
-
-    const masterVaultKey = await decryptWithVaultKey(
-      passwordWrappedVaultKey,
-      vaultKey,
-    );
-
-    // -----------------------------------------------------
-    // 3. Validate
-    // -----------------------------------------------------
-
-    if (decryptedVerifier !== VERIFIER_TEXT || !masterVaultKey) {
-      throw new Error("Invalid vault password");
+  // Historical Android salts included Base64.DEFAULT's trailing LF during
+  // derivation, but were trimmed by the server. Try that exact legacy format
+  // only after the stored format fails. Both GCM tags and the verifier must
+  // validate; never alter the password, stored ciphertext or master key.
+  const salts = [salt];
+  if (/^[A-Za-z0-9+/]{43}=$/.test(salt)) salts.push(`${salt}\n`);
+  for (const candidate of salts) {
+    try {
+      const vaultKey = await deriveVaultKey(password, candidate);
+      const decryptedVerifier = await decryptWithVaultKey(verifier, vaultKey);
+      if (decryptedVerifier !== VERIFIER_TEXT) continue;
+      const masterVaultKey = await decryptWithVaultKey(passwordWrappedVaultKey, vaultKey);
+      if (masterVaultKey) return masterVaultKey;
+    } catch (error) {
+      if (error.code === "VAULT_CRYPTO_UNAVAILABLE") throw error;
     }
-
-    // -----------------------------------------------------
-    // 4. Success
-    // -----------------------------------------------------
-
-    return masterVaultKey;
-  } catch (error) {
-    if (error.code === "VAULT_CRYPTO_UNAVAILABLE") throw error;
-    const failure = new Error("Could not unlock your vault. Check your password and try again. If it is correct, your vault data may need recovery.");
-    failure.code = "VAULT_UNLOCK_FAILED";
-    throw failure;
   }
+  const failure = new Error("Could not unlock your vault. Check your password and try again. If it is correct, your vault data may need recovery.");
+  failure.code = "VAULT_UNLOCK_FAILED";
+  throw failure;
 };
 
 // =========================================================

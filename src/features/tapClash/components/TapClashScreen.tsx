@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AccessibilityInfo, BackHandler, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppLayout } from '@/components/AppLayout';
-import { useGameTheme as useTheme, GameBack } from '@/features/games/GameUI';
+import { useGameTheme as useTheme } from '@/features/games/GameUI';
 import { ClashSetup } from './ClashSetup';
 import { useTapClash } from '../useTapClash';
 import { styles } from '../styles';
@@ -26,7 +26,7 @@ export default function TapClashScreen() {
     return () => handler.remove();
   }, [battle, pause, game.phase]);
   return <AppLayout themeOverride={theme} mobileTitle="Tap Clash" scrollable={false}>
-    {!battle && <GameBack onPress={() => router.replace('/games')} onSettings={() => setSettings(value => !value)} />}
+    {!battle && <Pressable accessibilityRole="button" accessibilityLabel="Game settings" onPress={() => setSettings(value => !value)} style={{ alignSelf: 'flex-end', minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: theme.text, fontSize: 24 }}>⋯</Text></Pressable>}
     {battle ? <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' }}>
       <BattleArena snapshot={game.snapshot} mode={game.mode} boundary={game.boundary} redPulse={game.redPulse} bluePulse={game.bluePulse} enabled={game.phase === 'running'} reducedMotion={reducedMotion} onTaps={game.tap} />
       {(game.phase === 'countdown' || (game.phase === 'running' && game.countdown === 0)) && <Countdown value={game.countdown} local={game.mode === 'local'} />}

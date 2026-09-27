@@ -1,3 +1,5 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
+import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { ShareSubjectModal, ShareSelection } from "@/components/subjects/ShareSubjectModal";
 import { shadow } from "@/styles/shadow";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -40,6 +42,7 @@ const sorts = [
 ] as const;
 export default function SubjectsScreen() {
   const t = useTheme();
+  const { showSuccess } = useFeedbackModal();
   const dark = useColorScheme() === "dark";
   const router = useRouter();
   const { width, height } = useWindowDimensions();
@@ -147,6 +150,7 @@ export default function SubjectsScreen() {
       if (editing) await updateSubject(editing._id, name.trim());
       else await createSubject(name.trim());
       setShowForm(false);
+      showSuccess({ title: editing ? "Subject Updated" : "Subject Created", message: "Your subject has been saved successfully." });
       await fetchSubjects();
     } catch {
       setFormError("Unable to save this subject. Please try again.");
@@ -161,6 +165,7 @@ export default function SubjectsScreen() {
     try {
       await deleteSubject(deleting._id);
       setDeleting(null);
+      showSuccess({ title: "Subject Deleted", message: "The subject has been moved to Recently Deleted." });
       await fetchSubjects();
     } catch {
       setFormError("Unable to delete this subject. Please try again.");
@@ -580,30 +585,9 @@ export default function SubjectsScreen() {
           onPress={save}
         />
       </FormModal>
-      <FormModal
-        visible={!!deleting}
-        title="Delete subject?"
-        subtitle={`“${deleting?.subjectName || ""}” and its topics and file references will move to Recently Deleted and can be restored during the restore period.`}
-        onClose={() => {
-          if (!busy) setDeleting(null);
-        }}
-      >
-        {formError ? (
-          <Text style={{ color: t.danger }}>{formError}</Text>
-        ) : null}
-        <Button
-          danger
-          label={busy ? "Deleting…" : "Delete subject"}
-          disabled={busy}
-          onPress={remove}
-        />
-        <Button
-          secondary
-          label="Keep subject"
-          disabled={busy}
-          onPress={() => setDeleting(null)}
-        />
-      </FormModal>
+      <ConfirmModal visible={!!deleting} title="Delete subject?"
+        message={`“${deleting?.subjectName || ""}” and its topics and file references will move to Recently Deleted and can be restored during the restore period.`}
+        busy={busy} error={formError} onClose={() => { if (!busy) setDeleting(null); }} onConfirm={remove} />
     </AppLayout>
   );
 }

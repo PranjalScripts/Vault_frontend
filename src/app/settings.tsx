@@ -1,7 +1,7 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { WebSettings } from "@/components/WebSettings";
 import React, { useState } from "react";
 import {
-  Alert,
   ImageBackground,
   Linking,
   Platform,
@@ -35,6 +35,7 @@ export default function SettingsScreen() {
 }
 
 function AppSettingsScreen() {
+  const { showSuccess, showError, showInfo } = useFeedbackModal();
   const p = useSettingsPalette();
   const { width } = useWindowDimensions();
   const router = useRouter();
@@ -124,11 +125,8 @@ function AppSettingsScreen() {
                   accessibilityLabel={`${option.label} theme`}
                   accessibilityState={{ checked: preference === option.value }}
                   onPress={() =>
-                    void setThemePreference(option.value).catch(() =>
-                      Alert.alert(
-                        "Theme not saved",
-                        "Your theme is applied, but could not be saved for your next visit.",
-                      ),
+                    void (preference === option.value ? Promise.resolve() : setThemePreference(option.value).then(() => showSuccess({ title: "Appearance Saved", message: "Your theme preference has been updated." }))).catch(() =>
+                      showError({ title: "Theme not saved", message: "Your theme is applied, but could not be saved for your next visit." }),
                     )
                   }
                   style={[
@@ -168,17 +166,11 @@ function AppSettingsScreen() {
           accessibilityRole="button"
           onPress={() => {
             if (Platform.OS === "web") {
-              Alert.alert(
-                "Phone notifications",
-                "Open Vault on your phone to manage notification permissions.",
-              );
+              showInfo({ title: "Phone notifications", message: "Open Vault on your phone to manage notification permissions." });
               return;
             }
             void Linking.openSettings().catch(() =>
-              Alert.alert(
-                "Phone notifications",
-                "Open your phone’s Settings to manage Vault notifications.",
-              ),
+              showInfo({ title: "Phone notifications", message: "Open your phone’s Settings to manage Vault notifications." }),
             );
           }}
           style={({ pressed }) => [
@@ -221,10 +213,7 @@ function AppSettingsScreen() {
               await logout();
               router.replace("/");
             } catch {
-              Alert.alert(
-                "Could not sign out",
-                "Please try signing out again.",
-              );
+              showError({ title: "Could not sign out", message: "Please try signing out again." });
             } finally {
               setSigningOut(false);
             }

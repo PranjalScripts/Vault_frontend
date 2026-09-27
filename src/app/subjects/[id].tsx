@@ -1,3 +1,5 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
+import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { ShareSubjectModal, ShareSelection } from "@/components/subjects/ShareSubjectModal";
 import { recordStudyActivity, recordSubjectStudyVisit } from "@/notifications/reminders";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -54,6 +56,7 @@ export default function SubjectDetailScreen() {
   useEffect(() => { setShowNotes(section === "notes"); }, [section, id]);
   const router = useRouter();
   const t = useTheme();
+  const { showSuccess } = useFeedbackModal();
   const { width } = useWindowDimensions();
   const mobile = width < 768;
   const compact = width < 1180;
@@ -187,6 +190,7 @@ export default function SubjectDetailScreen() {
       const response = await deleteTopic(id, deleting._id);
       setSubject(response.data.data);
       setDeleting(null);
+      showSuccess({ title: "Topic Deleted", message: "The topic has been moved to Recently Deleted." });
     } catch {
       setFormError("Unable to delete this topic. Please try again.");
     } finally {
@@ -202,6 +206,7 @@ export default function SubjectDetailScreen() {
       setSubject(response.data.data);
       if (next === "in_progress") recordStudyActivity(id, topic._id, subject?.subjectName, topic.topic);
       setTopicMenu(null);
+      showSuccess({ title: "Topic Updated", message: "The topic status has been saved." });
     } catch {
       setError("Unable to update status. Please try again.");
     } finally {
@@ -230,6 +235,7 @@ export default function SubjectDetailScreen() {
       });
       setSubject(response.data.data);
       setSubjectForm(false);
+      showSuccess({ title: "Subject Updated", message: "Your subject has been saved successfully." });
     } catch {
       setFormError("Unable to save subject. Please try again.");
     } finally {
@@ -242,7 +248,9 @@ export default function SubjectDetailScreen() {
     setFormError("");
     try {
       await deleteSubject(id);
+      setDeleteSubjectConfirm(false);
       router.replace("/subjects");
+      showSuccess({ title: "Subject Deleted", message: "The subject has been moved to Recently Deleted." });
     } catch {
       setFormError("Unable to delete subject. Please try again.");
     } finally {
@@ -1002,44 +1010,9 @@ export default function SubjectDetailScreen() {
           onPress={saveSubject}
         />
       </FormModal>
-      <FormModal
-        visible={!!deleting || deleteSubjectConfirm}
-        title={deleting ? "Delete topic?" : "Delete subject?"}
-        subtitle={
-          deleting
-            ? `“${deleting.topic || `Topic ${deleting.srNo}`}” and its resource references will move to Recently Deleted and can be restored during the restore period.`
-            : "This subject and all its topics and file references will move to Recently Deleted and can be restored during the restore period."
-        }
-        onClose={() => {
-          if (!busy) {
-            setDeleting(null);
-            setDeleteSubjectConfirm(false);
-          }
-        }}
-      >
-        {formError ? (
-          <Text accessibilityRole="alert" style={{ color: t.danger }}>
-            {formError}
-          </Text>
-        ) : null}
-        <Button
-          danger
-          label={
-            busy ? "Deleting…" : deleting ? "Delete topic" : "Delete subject"
-          }
-          disabled={busy}
-          onPress={deleting ? remove : removeSubject}
-        />
-        <Button
-          secondary
-          label="Cancel"
-          disabled={busy}
-          onPress={() => {
-            setDeleting(null);
-            setDeleteSubjectConfirm(false);
-          }}
-        />
-      </FormModal>
+      <ConfirmModal visible={!!deleting || deleteSubjectConfirm} title={deleting ? "Delete topic?" : "Delete subject?"}
+        message={deleting ? "This topic and its resource references will move to Recently Deleted." : "This subject and its topics and file references will move to Recently Deleted."}
+        busy={busy} error={formError} onClose={() => { if (!busy) { setDeleting(null); setDeleteSubjectConfirm(false); } }} onConfirm={deleting ? remove : removeSubject} />
     </AppLayout>
   );
 }

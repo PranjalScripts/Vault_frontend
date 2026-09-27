@@ -1,3 +1,4 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import React, { useState } from "react";
 import { Text, View } from "react-native";
 import { addTopic, updateTopic } from "@/api/api";
@@ -17,6 +18,7 @@ export function TopicEditor({
   onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useTheme();
+  const { showSuccess } = useFeedbackModal();
   const [name, setName] = useState(editing?.topic || "");
   const [description, setDescription] = useState(editing?.description || "");
   const [number, setNumber] = useState(
@@ -98,6 +100,7 @@ export function TopicEditor({
         ? await updateTopic(subject._id, editing._id, data)
         : await addTopic(subject._id, data);
       onSaved(response.data.data);
+      showSuccess({ title: editing ? "Topic Updated" : "Topic Added", message: "Your topic has been saved successfully." });
     } catch {
       setFormError("Unable to save this topic. Please try again.");
     } finally {

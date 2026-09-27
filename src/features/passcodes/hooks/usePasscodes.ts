@@ -1,8 +1,10 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { useCallback, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import Toast from "react-native-toast-message";
 
 export function usePasscodes() {
+  const { showError } = useFeedbackModal();
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -26,9 +28,9 @@ export function usePasscodes() {
       setTimeout(() => setCopiedField(null), 1500);
     } catch (error) {
       console.log("COPY ERROR:", error);
-      Toast.show({ type: "error", text1: "Copy failed", text2: "Unable to copy to clipboard." });
+      showError({ title: "Copy failed", message: "Unable to copy to clipboard." });
     }
-  }, []);
+  }, [showError]);
 
   return { revealedIds, copiedField, toggleReveal, copyToClipboard };
 }

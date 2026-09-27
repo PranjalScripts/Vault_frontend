@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { AppLayout } from '@/components/AppLayout';
-import { useGameTheme as useTheme, GameBack } from '@/features/games/GameUI';
+import { useGameTheme as useTheme } from '@/features/games/GameUI';
 import { usePathGame } from '../state/usePathGame';
 import { formatTime } from '../state/game';
 import { PathBoard } from './PathBoard';
@@ -16,7 +16,6 @@ export default function PathScreen({ newPuzzle = false }: { newPuzzle?: boolean 
   const wide = contentWidth >= 680;
   const current = newPuzzle ? null : game.state.game;
   const pendingAttempt = useRef<string | null | undefined>(undefined);
-  const returnToPuzzle = () => router.canGoBack() ? router.back() : router.replace('/games/path');
   useEffect(() => {
     if (newPuzzle && pendingAttempt.current !== undefined && game.state.game && game.state.game.attemptId !== pendingAttempt.current) {
       pendingAttempt.current = undefined;
@@ -34,7 +33,6 @@ export default function PathScreen({ newPuzzle = false }: { newPuzzle?: boolean 
   }, [current?.attemptId, current?.completed]);
   const showCompletion = current?.completed && completedGameId === current.attemptId;
   return <AppLayout themeOverride={theme} mobileTitle={newPuzzle ? 'New Puzzle' : 'Path'} scrollable={false}>
-    <GameBack backLabel={newPuzzle ? 'Back to puzzle' : 'Back to Games'} onPress={newPuzzle ? returnToPuzzle : () => router.replace('/games')} />
     <GestureHandlerRootView style={styles.content} onLayout={event => setContentWidth(event.nativeEvent.layout.width)}>
       {game.error ? <Text accessibilityLiveRegion="polite" style={{ color: theme.danger, fontSize: 12 }}>{game.error}</Text> : null}
       {!game.ready && !game.error && <ActivityIndicator color={theme.accent} accessibilityLabel="Loading saved game" />}

@@ -1,7 +1,7 @@
+import { useFeedbackModal, FeedbackModalHost, useDismissFeedback } from "@/contexts/FeedbackModalContext";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   StyleSheet,
   Text,
@@ -44,32 +44,26 @@ const VaultSetupModal: React.FC<
     setShowConfirmPassword,
   ] = useState(false);
 
+  const { showSuccess, showError } = useFeedbackModal();
+
+  const dismissFeedback = useDismissFeedback();
   const handleCreateVault = async () => {
     // ==========================================
     // VALIDATION
     // ==========================================
 
     if (!password.trim()) {
-      Alert.alert(
-        "Vault Password",
-        "Please enter a vault password."
-      );
+      showError({ title: "Vault Password", message: "Please enter a vault password." });
       return;
     }
 
     if (!confirmPassword.trim()) {
-      Alert.alert(
-        "Confirm Password",
-        "Please confirm your vault password."
-      );
+      showError({ title: "Confirm Password", message: "Please confirm your vault password." });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert(
-        "Password Mismatch",
-        "Vault passwords do not match."
-      );
+      showError({ title: "Password Mismatch", message: "Vault passwords do not match." });
       return;
     }
 
@@ -105,10 +99,7 @@ const VaultSetupModal: React.FC<
       setPassword("");
       setConfirmPassword("");
 
-      Alert.alert(
-        "Vault Created",
-        "Your vault has been created successfully."
-      );
+      showSuccess({ title: "Vault Created", message: "Your vault has been created successfully." });
 
       onClose?.();
     } catch (error: any) {
@@ -117,11 +108,8 @@ const VaultSetupModal: React.FC<
         error
       );
 
-      Alert.alert(
-        "Vault Setup Failed",
-        error?.message ||
-          "Unable to create your vault."
-      );
+      showError({ title: "Vault Setup Failed", message: error?.message ||
+          "Unable to create your vault." });
     } finally {
       setLoading(false);
     }
@@ -133,6 +121,7 @@ const VaultSetupModal: React.FC<
       transparent
       animationType="fade"
       onRequestClose={() => {
+        if (dismissFeedback()) return;
         if (!loading) {
           onClose?.();
         }
@@ -265,7 +254,7 @@ const VaultSetupModal: React.FC<
               />
             ) : (
               <Text style={styles.buttonText}>
-                Create Vault
+                Create Vaulte
               </Text>
             )}
           </TouchableOpacity>
@@ -287,7 +276,7 @@ const VaultSetupModal: React.FC<
 
         </View>
       </View>
-    </Modal>
+    <FeedbackModalHost active={visible} /></Modal>
   );
 };
 

@@ -9,7 +9,7 @@ import {
 
 import { PasscodeEditorShell } from "./PasscodeEditorShell";
 import { styles } from "@/features/passcodes/styles";
-
+import Feather from "@expo/vector-icons/Feather";
 export function VaultModal(props: any) {
   const {
     showVaultModal,
@@ -34,266 +34,356 @@ export function VaultModal(props: any) {
   } = props;
 
   return (
-    <PasscodeEditorShell visible={showVaultModal} title={isVaultCreated ? 'Unlock Vault' : 'Create Vault'} onClose={closeVaultModal} busy={unlocking || creatingVault}>
+    <PasscodeEditorShell
+      visible={showVaultModal}
+      onClose={closeVaultModal}
+      busy={unlocking || creatingVault}
+    >
+      <View
+        style={[
+          styles.unlockModal,
+          {
+            width: "100%",
+            maxWidth: 520,
+            alignSelf: "center",
+            borderRadius: 20,
+            padding: 24,
+            backgroundColor: theme.background,
+            borderWidth: 1,
+            borderColor: theme.border,
+          },
+        ]}
+      >
+        {/* Icon */}
         <View
-          style={[
-            styles.unlockModal,
-            { width: "100%", maxWidth: "100%", borderRadius: 0, padding: 0, elevation: 0, shadowOpacity: 0, boxShadow: "none" },
-            {
-              backgroundColor: theme.background,
-            },
-          ]}
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: `${theme.accent}14`,
+            marginBottom: 18,
+          }}
         >
-          <View style={[styles.modalTop, { display: "none" }]}>
-            <View style={styles.unlockIconCircle}>
-              <Text style={styles.unlockModalIcon}>
-                {isVaultCreated ? "🔐" : "🛡️"}
+          <Text style={{ fontSize: 25 }}>{isVaultCreated ? "🔐" : "🛡️"}</Text>
+        </View>
+
+        {/* Heading */}
+        <Text
+          style={{
+            color: theme.text,
+            fontSize: 24,
+            fontWeight: "700",
+            marginBottom: 7,
+          }}
+        >
+          {isVaultCreated ? "Unlock your Vault" : "Create your Vault"}
+        </Text>
+
+        <Text
+          style={{
+            color: theme.textSecondary,
+            fontSize: 14,
+            lineHeight: 21,
+            marginBottom: 20,
+          }}
+        >
+          {isVaultCreated
+            ? "Enter your master password to access your encrypted credentials."
+            : "Create a master password to protect all your saved credentials."}
+        </Text>
+
+        {/* Security message */}
+        {!isVaultCreated && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: `${theme.accent}0D`,
+              marginBottom: 24,
+            }}
+          >
+            <Feather name="shield" size={18} color={theme.accent} />
+
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: theme.text,
+                  fontSize: 13,
+                  fontWeight: "600",
+                }}
+              >
+                End-to-end encrypted
+              </Text>
+
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
+                Your credentials stay protected inside your Vault.
               </Text>
             </View>
-
-            <TouchableOpacity
-              onPress={closeVaultModal}
-              style={styles.modalCloseButton}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.modalCloseText,
-                  {
-                    color: theme.textSecondary,
-                  },
-                ]}
-              >
-                ✕
-              </Text>
-            </TouchableOpacity>
           </View>
+        )}
 
-          <Text
+        {/* Password */}
+        <Text
+          style={{
+            color: theme.textSecondary,
+            fontSize: 12,
+            fontWeight: "600",
+            marginBottom: 8,
+          }}
+        >
+          VAULT PASSWORD
+        </Text>
+
+        <View style={styles.passwordInputWrapper}>
+          <TextInput
             style={[
-              styles.modalTitle,
+              styles.unlockInput,
               {
                 color: theme.text,
+                backgroundColor: theme.background,
+                borderColor: vaultError ? theme.danger : theme.border,
               },
             ]}
+            placeholder={
+              isVaultCreated
+                ? "Enter your vault password"
+                : "Create a strong password"
+            }
+            placeholderTextColor={theme.textSecondary}
+            value={vaultPassword}
+            onChangeText={(value) => {
+              setVaultPassword(value);
+              if (vaultError) setVaultError("");
+            }}
+            secureTextEntry={!showVaultPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!unlocking && !creatingVault}
+            onSubmitEditing={isVaultCreated ? handleUnlock : handleCreateVault}
+          />
+
+          <TouchableOpacity
+            style={styles.passwordVisibilityButton}
+            onPress={() => setShowVaultPassword((value: boolean) => !value)}
+            disabled={unlocking || creatingVault}
           >
-            {isVaultCreated ? "Unlock your vault" : "Create your vault"}
-          </Text>
-
-          <Text
-            style={[
-              styles.modalSubtitle,
-              {
-                color: theme.textSecondary,
-              },
-            ]}
-          >
-            {isVaultCreated
-              ? "Enter your vault password to access your saved credentials."
-              : "Create a strong password. This password protects your encrypted credentials."}
-          </Text>
-
-          <Text
-            style={[
-              styles.fieldLabel,
-              {
-                color: theme.textSecondary,
-              },
-            ]}
-          >
-            VAULT PASSWORD
-          </Text>
-
-          <View style={styles.passwordInputWrapper}>
-            <TextInput
-              style={[
-                styles.unlockInput,
-                {
-                  color: theme.text,
-
-                  backgroundColor: theme.background,
-
-                  borderColor: vaultError ? theme.danger : theme.border,
-                },
-              ]}
-              placeholder={
-                isVaultCreated
-                  ? "Enter vault password"
-                  : "Create vault password"
-              }
-              placeholderTextColor={theme.textSecondary}
-              value={vaultPassword}
-              onChangeText={(value: string) => {
-                setVaultPassword(value);
-
-                if (vaultError) {
-                  setVaultError("");
-                }
-              }}
-              secureTextEntry={!showVaultPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!unlocking && !creatingVault}
-              onSubmitEditing={
-                isVaultCreated ? handleUnlock : handleCreateVault
-              }
+            <Feather
+              name={showVaultPassword ? "eye-off" : "eye"}
+              size={19}
+              color={theme.textSecondary}
             />
+          </TouchableOpacity>
+        </View>
 
-            <TouchableOpacity
-              style={styles.passwordVisibilityButton}
-              onPress={() => setShowVaultPassword((value: boolean) => !value)}
-              disabled={unlocking || creatingVault}
-              activeOpacity={0.7}
+        {/* Confirm password */}
+        {!isVaultCreated && (
+          <>
+            <Text
+              style={{
+                color: theme.textSecondary,
+                fontSize: 12,
+                fontWeight: "600",
+                marginTop: 18,
+                marginBottom: 8,
+              }}
             >
-              <Text style={styles.passwordVisibilityText}>
-                {showVaultPassword ? "🙈" : "👁️"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+              CONFIRM PASSWORD
+            </Text>
 
-          {/* CONFIRM PASSWORD ONLY DURING CREATION */}
-
-          {!isVaultCreated && (
-            <>
-              <Text
+            <View style={styles.passwordInputWrapper}>
+              <TextInput
                 style={[
-                  styles.fieldLabel,
+                  styles.unlockInput,
                   {
-                    color: theme.textSecondary,
-                    marginTop: 14,
+                    color: theme.text,
+                    backgroundColor: theme.background,
+                    borderColor: vaultError ? theme.danger : theme.border,
                   },
                 ]}
+                placeholder="Re-enter your password"
+                placeholderTextColor={theme.textSecondary}
+                value={confirmVaultPassword}
+                onChangeText={(value) => {
+                  setConfirmVaultPassword(value);
+                  if (vaultError) setVaultError("");
+                }}
+                secureTextEntry={!showConfirmVaultPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!unlocking && !creatingVault}
+                onSubmitEditing={handleCreateVault}
+              />
+
+              <TouchableOpacity
+                style={styles.passwordVisibilityButton}
+                onPress={() =>
+                  setShowConfirmVaultPassword((value: boolean) => !value)
+                }
+                disabled={unlocking || creatingVault}
               >
-                CONFIRM VAULT PASSWORD
-              </Text>
-
-              <View style={styles.passwordInputWrapper}>
-                <TextInput
-                  style={[
-                    styles.unlockInput,
-                    {
-                      color: theme.text,
-
-                      backgroundColor: theme.background,
-
-                      borderColor: vaultError ? theme.danger : theme.border,
-                    },
-                  ]}
-                  placeholder="Confirm vault password"
-                  placeholderTextColor={theme.textSecondary}
-                  value={confirmVaultPassword}
-                  onChangeText={(value: string) => {
-                    setConfirmVaultPassword(value);
-
-                    if (vaultError) {
-                      setVaultError("");
-                    }
-                  }}
-                  secureTextEntry={!showConfirmVaultPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!unlocking && !creatingVault}
-                  onSubmitEditing={handleCreateVault}
+                <Feather
+                  name={showConfirmVaultPassword ? "eye-off" : "eye"}
+                  size={19}
+                  color={theme.textSecondary}
                 />
+              </TouchableOpacity>
+            </View>
 
-                <TouchableOpacity
-                  style={styles.passwordVisibilityButton}
-                  onPress={() =>
-                    setShowConfirmVaultPassword((value: boolean) => !value)
-                  }
-                  disabled={unlocking || creatingVault}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.passwordVisibilityText}>
-                    {showConfirmVaultPassword ? "🙈" : "👁️"}
-                  </Text>
-                </TouchableOpacity>
+            {/* Password guidance */}
+            <View
+              style={{
+                marginTop: 14,
+                gap: 6,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 7,
+                }}
+              >
+                
               </View>
-            </>
-          )}
 
-          {vaultError ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 7,
+                }}
+              >
+                <Feather
+                  name="check-circle"
+                  size={14}
+                  color={theme.textSecondary}
+                />
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                  }}
+                >
+                  Choose a password you can remember
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Error */}
+        {vaultError ? (
+          <View
+            style={{
+              marginTop: 14,
+              padding: 10,
+              borderRadius: 10,
+              backgroundColor: `${theme.danger}10`,
+            }}
+          >
             <Text
               accessibilityRole="alert"
-              accessibilityLiveRegion="polite"
-              style={[
-                styles.unlockError,
-                {
-                  color: theme.danger,
-                },
-              ]}
+              style={{
+                color: theme.danger,
+                fontSize: 13,
+              }}
             >
               {vaultError}
             </Text>
-          ) : null}
+          </View>
+        ) : null}
 
-          <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={[
-                styles.modalCancelButton,
-                {
-                  borderColor: theme.border,
-                },
-              ]}
-              onPress={closeVaultModal}
-              disabled={unlocking || creatingVault}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.modalCancelText,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
-                Cancel
-              </Text>
-            </TouchableOpacity>
+        {/* Actions */}
+        <View
+          style={{
+            flexDirection: "row",
+            gap: 10,
+            marginTop: 24,
+          }}
+        >
+          <TouchableOpacity
+            style={[
+              styles.modalCancelButton,
+              {
+                flex: 1,
+                borderColor: theme.border,
+              },
+            ]}
+            onPress={closeVaultModal}
+            disabled={unlocking || creatingVault}
+          >
+            <Text style={[styles.modalCancelText, { color: theme.text }]}>
+              Cancel
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.modalUpdateButton,
-                {
-                  backgroundColor: theme.accent,
-                },
-
-                (unlocking || creatingVault) && styles.disabledButton,
-              ]}
-              onPress={isVaultCreated ? handleUnlock : handleCreateVault}
-              disabled={unlocking || creatingVault}
-              activeOpacity={0.8}
-            >
-              {unlocking || creatingVault ? (
-                <ActivityIndicator color={theme.background} />
-              ) : (
-                <Text style={[styles.modalUpdateText, { color: theme.background }]}>
+          <TouchableOpacity
+            style={[
+              styles.modalUpdateButton,
+              {
+                flex: 1.3,
+                backgroundColor: theme.accent,
+                flexDirection: "row",
+                gap: 7,
+              },
+              (unlocking || creatingVault) && styles.disabledButton,
+            ]}
+            onPress={isVaultCreated ? handleUnlock : handleCreateVault}
+            disabled={unlocking || creatingVault}
+          >
+            {unlocking || creatingVault ? (
+              <ActivityIndicator color={theme.background} />
+            ) : (
+              <>
+                <Text
+                  style={[styles.modalUpdateText, { color: theme.background }]}
+                >
                   {isVaultCreated ? "Unlock Vault" : "Create Vault"}
                 </Text>
-              )}
-            </TouchableOpacity>
-          </View>
 
-          {isVaultCreated && (
-            <TouchableOpacity
-              style={styles.forgotPasswordButton}
-              onPress={onForgotPassword}
-              disabled={unlocking || creatingVault}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.forgotPasswordText,
-                  {
-                    color: theme.accent,
-                  },
-                ]}
-              >
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
-          )}
+                <Feather
+                  name="arrow-right"
+                  size={16}
+                  color={theme.background}
+                />
+              </>
+            )}
+          </TouchableOpacity>
         </View>
+
+        {isVaultCreated && (
+          <TouchableOpacity
+            style={{
+              alignSelf: "center",
+              marginTop: 18,
+              padding: 6,
+            }}
+            onPress={onForgotPassword}
+            disabled={unlocking || creatingVault}
+          >
+            <Text
+              style={{
+                color: theme.accent,
+                fontWeight: "600",
+                fontSize: 13,
+              }}
+            >
+              Forgot your password?
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </PasscodeEditorShell>
   );
 }

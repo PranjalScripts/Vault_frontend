@@ -1,6 +1,6 @@
+import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  Alert,
   StyleSheet,
   Text,
   View,
@@ -52,6 +52,7 @@ const initialData: DashboardData = {
 const getDashboardStreak = () => 0;
 
 export default function DashboardScreen() {
+  const { showSuccess, showError } = useFeedbackModal();
   const theme = useTheme();
   const colorScheme = useColorScheme();
   const router = useRouter();
@@ -164,6 +165,7 @@ export default function DashboardScreen() {
           item._id === todo._id ? response.data.data : item,
         ),
       }));
+      showSuccess({ title: nextCompleted ? "Task Completed" : "Task Reopened", message: "Your task status has been saved." });
     } catch {
       setData((current) => ({
         ...current,
@@ -175,9 +177,9 @@ export default function DashboardScreen() {
           current.completedTodos + (nextCompleted ? -1 : 1),
         ),
       }));
-      Alert.alert("Unable to update", "Please try again.");
+      showError({ title: "Unable to update", message: "Please try again." });
     }
-  }, []);
+  }, [showSuccess, showError]);
 
   const statCards = useMemo(
     () => [

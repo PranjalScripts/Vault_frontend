@@ -1,5 +1,5 @@
 export const difficulties = ['easy', 'medium', 'hard', 'expert'] as const;
-export const variations = ['classic', 'walls', 'blocked', 'sparse', 'turns', 'mixed'] as const;
+export const variations = ['classic', 'walls', 'blocked', 'sparse', 'mixed'] as const;
 export type Difficulty = typeof difficulties[number];
 export type Variation = typeof variations[number];
 export type Position = { row: number; col: number };

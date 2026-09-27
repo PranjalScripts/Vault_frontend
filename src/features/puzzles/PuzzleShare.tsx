@@ -14,7 +14,7 @@ export function PuzzleShare({ puzzle }: { puzzle: Puzzle }) {
     try {
       const origin = process.env.EXPO_PUBLIC_WEB_URL || (Platform.OS === 'web' ? window.location.origin : '');
       if (!/^https?:\/\//i.test(origin)) throw Error('The public website address is not configured for sharing.');
-      const url = new URL(`/games/puzzles/${encodeURIComponent(puzzle.id)}`, origin).toString();
+      const url = new URL(`/puzzles/${encodeURIComponent(puzzle.id)}`, origin).toString();
       // Send only the URL: some share targets concatenate text into the link.
       if (Platform.OS === 'web' && typeof navigator.share === 'function') {
         await navigator.share({ url });
