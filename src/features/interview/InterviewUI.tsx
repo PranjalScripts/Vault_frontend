@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -9,7 +9,7 @@ import {
 import Feather from "@expo/vector-icons/Feather";
 import { useRouter } from "expo-router";
 import { AppLayout } from "@/components/AppLayout";
-import { Button, Empty } from "@/components/subjects/SubjectUI";
+import { Empty } from "@/components/subjects/SubjectUI";
 import { useTheme } from "@/hooks/use-theme";
 import type { Question, Summary } from "./types";
 
@@ -36,7 +36,7 @@ export function InterviewPage({
       <View
         style={[
           styles.page,
-          mobile && { paddingHorizontal: 16, paddingTop: 20 },
+          mobile && { paddingHorizontal: 16, paddingTop: 16, gap: 18 },
         ]}
       >
         <View style={styles.row}>
@@ -56,7 +56,7 @@ export function InterviewPage({
             </Text>
             <Text
               accessibilityRole="header"
-              style={[styles.title, { color: theme.text }]}
+              style={[styles.title, mobile && { fontSize: 24, lineHeight: 30 }, { color: theme.text }]}
             >
               {title}
             </Text>
@@ -72,6 +72,19 @@ export function InterviewPage({
     </AppLayout>
   );
 }
+/** Measure available content width, including the desktop sidebar's effect. */
+export function InterviewGrid({ children, summary = false }: { children: React.ReactNode; summary?: boolean }) {
+  const [width, setWidth] = useState(0);
+  const gap = 12;
+  const minimum = summary ? 310 : 250;
+  const columns = Math.max(1, Math.min(summary ? 2 : 3, Math.floor((width + gap) / (minimum + gap))));
+  const cardWidth = width ? Math.min(summary ? 520 : 360, (width - gap * (columns - 1)) / columns) : undefined;
+  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)} style={styles.grid}>
+    {React.Children.toArray(children).map((child, index) => <View key={React.isValidElement(child) ? child.key ?? index : index}
+      style={{ width: width < 520 ? "100%" : cardWidth, maxWidth: "100%" }}>{child}</View>)}
+  </View>;
+}
+
 export function ProgressBar({
   stats,
   title = "Progress",
@@ -81,7 +94,7 @@ export function ProgressBar({
 }) {
   const theme = useTheme();
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: 8 }}>
       <View style={styles.row}>
         <Text style={[styles.label, { color: theme.text }]}>{title}</Text>
         <Text style={[styles.body, { color: theme.textSecondary }]}>
@@ -140,7 +153,6 @@ export function CatalogCard({
   onPress: () => void;
 }) {
   const theme = useTheme();
-  const mobile = useWindowDimensions().width < 700;
   return (
     <Pressable
       accessibilityRole="button"
@@ -149,8 +161,7 @@ export function CatalogCard({
       style={({ pressed }) => [
         styles.panel,
         {
-          flexBasis: mobile ? "100%" : "46%",
-          flexGrow: 1,
+          height: "100%",
           backgroundColor: theme.backgroundElement,
           borderColor: theme.border,
           opacity: pressed ? 0.75 : 1,
@@ -159,13 +170,13 @@ export function CatalogCard({
     >
       <View style={styles.row}>
         <View style={[styles.icon, { backgroundColor: theme.accentMuted }]}>
-          <Feather name="book-open" size={24} color={theme.accent} />
+          <Feather name="book-open" size={19} color={theme.accent} />
         </View>
-        <Feather name="arrow-up-right" size={20} color={theme.textSecondary} />
+        <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{title}</Text>
+        <Feather name="chevron-right" size={18} color={theme.textSecondary} />
       </View>
-      <Text style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
       {!!description && (
-        <Text style={[styles.body, { color: theme.textSecondary }]}>
+        <Text numberOfLines={2} style={[styles.body, { color: theme.textSecondary }]}>
           {description}
         </Text>
       )}
@@ -188,30 +199,22 @@ export function ContinueRevision({ question }: { question: Question | null }) {
   const theme = useTheme();
   const router = useRouter();
   return (
-    <Panel>
-      <Text
-        accessibilityRole="header"
-        style={[styles.cardTitle, { color: theme.text }]}
-      >
-        Continue Revision
+    <Pressable accessibilityRole="button" accessibilityLabel={question ? `Continue revision: ${question.question}` : "Questions coming soon"}
+      accessibilityState={{ disabled: !question }} disabled={!question}
+      onPress={() => { if (question) router.push({ pathname: "/interview/question/[id]", params: { id: question._id } }); }}
+      style={({ pressed }) => [styles.panel, { backgroundColor: theme.accentMuted, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }]}>
+      <View style={styles.row}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Feather name="play-circle" size={18} color={theme.accent} />
+          <Text style={[styles.label, { color: theme.accent }]}>Continue revision</Text>
+        </View>
+        <Feather name="arrow-right" size={18} color={theme.accent} />
+      </View>
+      <Text numberOfLines={2} style={[styles.body, { color: theme.text, fontWeight: "600" }]}>
+        {question ? `Q${question.questionNumber} · ${question.question}` : "Your next revision will appear here when questions are available."}
       </Text>
-      <Text style={[styles.body, { color: theme.textSecondary }]}>
-        {question
-          ? `${question.subject.name} · ${question.topic.name}\nQ${question.questionNumber} — ${question.question}`
-          : "Your next revision will appear here when questions are available."}
-      </Text>
-      <Button
-        label={question ? "Continue revision" : "Questions coming soon"}
-        disabled={!question}
-        onPress={() => {
-          if (question)
-            router.push({
-              pathname: "/interview/question/[id]",
-              params: { id: question._id },
-            });
-        }}
-      />
-    </Panel>
+      {question && <Text numberOfLines={1} style={[styles.caption, { color: theme.textSecondary }]}>{question.subject.name} · {question.topic.name}</Text>}
+    </Pressable>
   );
 }
 export function ResourceState({
@@ -240,7 +243,7 @@ export const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1120,
     alignSelf: "center",
-    gap: 24,
+    gap: 20,
     paddingBottom: 32,
   },
   row: {
@@ -250,24 +253,25 @@ export const styles = StyleSheet.create({
     gap: 12,
     flexWrap: "wrap",
   },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
-  panel: { borderWidth: 1, borderRadius: 20, padding: 22, gap: 16 },
+  grid: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 12 },
+  panel: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 },
   title: {
-    fontSize: 30,
-    lineHeight: 38,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: "800",
     letterSpacing: -0.8,
     marginVertical: 6,
   },
   eyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.6 },
-  cardTitle: { fontSize: 20, lineHeight: 28, fontWeight: "700" },
+  cardTitle: { fontSize: 17, lineHeight: 24, fontWeight: "700" },
+  caption: { fontSize: 12, lineHeight: 18 },
   label: { fontSize: 14, fontWeight: "600" },
-  body: { fontSize: 14, lineHeight: 23 },
-  track: { height: 8, borderRadius: 6, overflow: "hidden" },
+  body: { fontSize: 14, lineHeight: 21 },
+  track: { height: 5, borderRadius: 6, overflow: "hidden" },
   icon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
   },

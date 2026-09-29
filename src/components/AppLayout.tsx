@@ -1,6 +1,7 @@
 import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { shadow } from "@/styles/shadow";
 import React from "react";
+import NotificationBell from "./NotificationBell";
 import { NavigationIcon } from "./NavigationIcon";
 import Feather from "@expo/vector-icons/Feather";
 import {
@@ -486,9 +487,7 @@ export function AppLayout({
                 <Feather name="search" size={21} color={theme.textSecondary} />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
-                <Text style={styles.iconText}>🔔</Text>
-              </TouchableOpacity>
+              <NotificationBell />
 
               <View style={styles.profileBadge}>
                 {user?.picture ? (
@@ -699,13 +698,8 @@ export function AppLayout({
                 <Feather name="search" size={21} color={theme.text} />
               </TouchableOpacity>
             )}
-            {mobileHeaderActions || (
-              <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
-                <Text style={[styles.headerIcon, { color: theme.text }]}>
-                  🔔
-                </Text>
-              </TouchableOpacity>
-            )}
+            {mobileHeaderActions}
+            <NotificationBell />
           </View>
         </View>}
       </SafeAreaView>

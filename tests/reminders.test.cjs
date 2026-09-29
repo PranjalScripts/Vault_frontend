@@ -13,146 +13,6 @@ function compile(file, imports = {}) {
   });
   return exports;
 }
-const planner = compile('planner.ts');
-const now = Date.parse('2026-09-16T10:00:00Z');
-const prefs = { enabled: true, tasks: true, study: true, intervalMinutes: 180 };
-const task = { _id: 'task1', title: 'Read chapter', dueDate: '2026-09-16T12:00:00Z' };
-const study = { subjectId: 'subject1', topicId: 'topic1', subjectName: 'Physics', topicTitle: 'Gravity', lastStudiedAt: now };
-const plan = (snapshot, preferences = prefs, time = now) => planner.planReminders(snapshot, preferences, 'owner', time);
-
-test('future tasks start at due time and repeat at the selected interval', () => {
-  for (const minutes of [1, 120, 180]) {
-    const items = plan({ tasks: [task], study: null }, { ...prefs, intervalMinutes: minutes });
-    assert.equal(items[0].at, Date.parse(task.dueDate));
-    assert.equal(items[1].at - items[0].at, minutes * 60000);
-    assert.equal(items[0].data.itemId, task._id);
-    assert.equal(items[0].data.userId, 'owner');
-  }
-});
-test('completion, deletion, invalid dates and disabled categories remove reminders', () => {
-  const tasks = [{ ...task, isCompleted: true }, { ...task, deletedAt: 'date' }, { ...task, dueDate: 'bad' }, { ...task, dueDate: null }];
-  assert.deepEqual(plan({ tasks, study: null }), []);
-  assert.deepEqual(plan({ tasks: [task], study }, { ...prefs, enabled: false }), []);
-  assert.deepEqual(plan({ tasks: [task], study }, { ...prefs, tasks: false, study: false }), []);
-});
-test('multiple due tasks are grouped without mentioning future tasks too early', () => {
-  const later = { ...task, _id: 'task2', title: 'Later task', dueDate: '2026-09-16T15:00:00Z' };
-  const items = plan({ tasks: [task, later], study: null });
-  assert.equal(items[0].title, 'Task due'); assert.ok(!items[0].body.includes('Later task'));
-  assert.equal(items[1].title, '2 tasks are due'); assert.equal(items[1].data.itemId, undefined);
-});
-test('reopening the app preserves the cadence and schedules no past dates', () => {
-  const first = plan({ tasks: [task], study });
-  const later = plan({ tasks: [task], study }, prefs, now + 3600000);
-  assert.deepEqual(first, later);
-  const overdue = plan({ tasks: [task], study }, prefs, now + 6 * 3600000);
-  assert.ok(overdue.every(item => item.at > now + 6 * 3600000));
-});
-test('study starts after one interval and retains daily follow-ups for long absences', () => {
-  const items = plan({ tasks: [], study });
-  assert.equal(items[0].at, now + 3 * 3600000);
-  assert.equal(items[0].data.topicId, 'topic1');
-  assert.ok(items.every(item => item.at <= now + 7 * 86400000));
-  const afterAbsence = plan({ tasks: [], study }, prefs, now + 8 * 86400000);
-  assert.equal(afterAbsence.length, 7);
-  assert.equal(afterAbsence[0].at, now + 9 * 86400000);
-  assert.match(afterAbsence[0].body, /9 days/);
-});
-test('new study activity resets the timer and both categories share a bounded queue', () => {
-  const items = plan({ tasks: [task], study }, { ...prefs, intervalMinutes: 120 });
-  assert.equal(items.length, 60);
-  assert.ok(items.some(item => item.data.kind === 'task'));
-  assert.ok(items.some(item => item.data.kind === 'study'));
-  assert.equal(new Set(items.map(item => item.id)).size, 60);
-  const recent = { ...study, lastStudiedAt: now + 3600000 };
-  assert.equal(plan({ tasks: [], study: recent }, prefs, recent.lastStudiedAt)[0].at, recent.lastStudiedAt + 3 * 3600000);
-});
-
-function harness({ platform = 'android', granted = true, offline = false, nativeNotifications = true, apiTasks = [], existingChannel = null } = {}) {
-  const store = new Map([['vault-auth-token', 'token'], ['vault-reminders-owner', JSON.stringify(prefs)]]);
-  const scheduled = new Map(); const calls = { network: 0, canceled: 0, scheduled: 0, permissions: 0, channels: [] };
-  const notifications = {
-    SchedulableTriggerInputTypes: { DATE: 'date', TIME_INTERVAL: 'timeInterval' }, AndroidImportance: { NONE: 0, DEFAULT: 3, HIGH: 4 }, AndroidNotificationVisibility: { PRIVATE: 0 }, IosAuthorizationStatus: { PROVISIONAL: 3 },
-    getPermissionsAsync: async () => ({ granted, canAskAgain: false }),
-    requestPermissionsAsync: async () => { calls.permissions++; return { granted }; },
-    getNotificationChannelAsync: async () => existingChannel,
-    setNotificationChannelAsync: async (id, config) => { calls.channels.push({ id, ...config }); existingChannel = config; },
-    getAllScheduledNotificationsAsync: async () => [...scheduled.values()],
-    cancelScheduledNotificationAsync: async id => { calls.canceled++; scheduled.delete(id); },
-    scheduleNotificationAsync: async item => { calls.scheduled++; scheduled.set(item.identifier, item); return item.identifier; },
-    dismissAllNotificationsAsync: async () => {}, clearLastNotificationResponse: () => {},
-  };
-  const storage = { getItem: async key => store.get(key) || null, setItem: async (key, value) => store.set(key, value) };
-  const api = { get: async () => { calls.network++; if (offline) throw new Error('offline'); return { data: { data: apiTasks, pagination: { hasNextPage: false } } }; } };
-  const secure = { getItemAsync: storage.getItem, setItemAsync: storage.setItem, deleteItemAsync: async key => store.delete(key) };
-  const snapshots = compile('snapshotStore.ts', { 'expo-secure-store': secure });
-  const service = compile('reminders.ts', {
-    'react-native': { Platform: { OS: platform } },
-    'expo': { requireOptionalNativeModule: () => nativeNotifications ? {} : null },
-    './snapshotStore': snapshots,
-    './notificationModule': compile('notificationModule.ts', { 'expo-notifications': notifications }),
-    'expo-secure-store': secure,
-    '@/api/client': { default: api }, '@/api/auth': { getAuthUser: async () => ({ id: 'owner' }) },
-    './planner': planner, 'expo-notifications': notifications,
-  });
-  const capture = (data, url = '/todos/task1', method = 'put', token = 'token') => service.captureReminderData({
-    config: { url, method, headers: { Authorization: `Bearer ${token}` } }, data: { data },
-  });
-  return { service, store, scheduled, calls, capture };
-}
-test('a task edit schedules OS dates; completing it cancels them without a notification server', async () => {
-  const h = harness();
-  await h.capture({ ...task, dueDate: new Date(Date.now() + 3600000).toISOString() });
-  assert.equal(h.scheduled.size, 60); assert.equal(h.calls.network, 0);
-  for (const item of h.scheduled.values()) assert.equal(item.trigger.type, 'date');
-  await h.capture({ ...task, isCompleted: true });
-  assert.equal(h.scheduled.size, 0);
-});
-test('identical responses do not duplicate scheduled notifications', async () => {
-  const h = harness(); const future = { ...task, dueDate: new Date(Date.now() + 3600000).toISOString() };
-  await h.capture(future); await h.capture(future);
-  assert.equal(h.calls.scheduled, 60); assert.equal(h.calls.canceled, 0);
-});
-test('offline refresh preserves and refills persisted reminders; sign-out cancels offline', async () => {
-  const h = harness({ offline: true });
-  await h.capture({ ...task, dueDate: new Date(Date.now() + 3600000).toISOString() });
-  await h.service.refreshLocalReminders();
-  assert.equal(h.scheduled.size, 60);
-  const before = h.calls.network;
-  await h.service.clearLocalReminders();
-  assert.equal(h.scheduled.size, 0); assert.equal(h.calls.network, before);
-});
-test('denied notification permission schedules nothing and returns a useful error', async () => {
-  const h = harness({ granted: false });
-  await assert.rejects(h.service.saveReminderPreferences(prefs), /Allow notifications/);
-  assert.equal(h.scheduled.size, 0); assert.equal(h.calls.network, 0);
-});
-test('web never asks for permission or schedules reminders', async () => {
-  const h = harness({ platform: 'web' });
-  await h.service.saveReminderPreferences(prefs); await h.capture(task); await h.service.refreshLocalReminders();
-  assert.equal(h.calls.permissions, 0); assert.equal(h.scheduled.size, 0); assert.equal(h.calls.network, 0);
-});
-test('stale responses from a different account cannot schedule alerts', async () => {
-  const h = harness(); await h.capture(task, '/todos/task1', 'put', 'another-token');
-  assert.equal(h.scheduled.size, 0);
-});
-test('deleting a topic or completing it cancels local study notifications', async () => {
-  const h = harness();
-  h.store.set('vault-reminder-data-owner', JSON.stringify({ tasks: [], study: { ...study, lastStudiedAt: Date.now() } }));
-  await h.service.saveReminderPreferences(prefs);
-  assert.ok(h.scheduled.size > 0);
-  await h.capture({ _id: 'subject1', subjectName: 'Physics', topics: [{ _id: 'topic1', topic: 'Gravity', status: 'completed' }] }, '/subjects/subject1/topics/topic1');
-  assert.equal(h.scheduled.size, 0);
-});
-
-test('an older app binary can load and sign out without the notifications native module', async () => {
-  const h = harness({ nativeNotifications: false });
-  assert.equal(h.service.notificationsAvailable, false);
-  await h.service.clearLocalReminders();
-  await assert.rejects(h.service.saveReminderPreferences(prefs), /Rebuild and reinstall/);
-  assert.equal(h.calls.scheduled, 0);
-});
-
 test('SecureStore snapshot chunks preserve large Unicode values within small native entries', async () => {
   const values = new Map();
   const secure = {
@@ -220,125 +80,129 @@ test('notification cleanup failure cannot block logout or retain credentials', a
 });
 
 
-test('one-minute study reminders start after sixty seconds and stay within the queue budget', () => {
-  const items = plan({ tasks: [], study }, { ...prefs, intervalMinutes: 1 });
-  assert.equal(items[0].at, now + 60000);
-  assert.equal(items[1].at - items[0].at, 60000);
-  assert.equal(items.length, 60);
+function migration(platform = 'android', native = true) {
+  const calls = { cancelled: [], dismissed: [], cleared: 0, activities: [] };
+  let response = { notification: { request: { identifier: 'remote-push-1' } } };
+  const service = compile('reminders.ts', {
+    'react-native': { Platform: { OS: platform } },
+    'expo': { requireOptionalNativeModule: () => native ? {} : null },
+    './activity': { recordReminderActivity: async activity => calls.activities.push(activity) },
+    './notificationModule': { loadNotifications: () => ({
+      getAllScheduledNotificationsAsync: async () => [{ identifier: 'vault-local-task-1' }, { identifier: 'other-app-schedule' }],
+      getPresentedNotificationsAsync: async () => [{ request: { identifier: 'vault-local-study-1' } }, { request: { identifier: 'remote-push-1' } }],
+      cancelScheduledNotificationAsync: async id => calls.cancelled.push(id),
+      dismissNotificationAsync: async id => calls.dismissed.push(id),
+      getLastNotificationResponse: () => response,
+      clearLastNotificationResponse: () => { calls.cleared++; },
+    }) },
+  });
+  return { service, calls, setResponse: value => { response = value; } };
+}
+test('migration cancels legacy schedules without destroying a remote cold-start tap', async () => {
+  const h = migration();
+  await h.service.clearLocalReminders();
+  assert.deepEqual(h.calls.cancelled, ['vault-local-task-1']);
+  assert.deepEqual(h.calls.dismissed, ['vault-local-study-1']);
+  assert.equal(h.calls.cleared, 0);
+  h.setResponse({ notification: { request: { identifier: 'vault-local-task-1' } } });
+  await h.service.clearLocalReminders(); assert.equal(h.calls.cleared, 1);
 });
-
-test('stored hour-based preferences migrate and the one-minute option persists', async () => {
-  const h = harness();
-  for (const [hours, expected] of [[2, 120], [3, 180]]) {
-    h.store.set('vault-reminders-owner', JSON.stringify({ enabled: true, tasks: true, study: true, intervalHours: hours }));
-    assert.equal((await h.service.readReminderPreferences()).intervalMinutes, expected);
-  }
-  await h.service.saveReminderPreferences({ ...prefs, intervalMinutes: 1 });
-  assert.equal((await h.service.readReminderPreferences()).intervalMinutes, 1);
-});
-
-test('empty schedules explain eligibility instead of claiming reminders are queued', async () => {
-  const h = harness();
-  assert.match(await h.service.getReminderScheduleStatus(), /Nothing scheduled yet/);
-  await h.service.saveReminderPreferences({ ...prefs, tasks: false });
-  assert.match(await h.service.getReminderScheduleStatus(), /unfinished subject or topic/);
-});
-
-test('selecting one minute refreshes a missing snapshot and schedules an overdue task', async () => {
-  const due = { ...task, dueDate: new Date(Date.now() - 3600000).toISOString() };
-  const h = harness({ apiTasks: [due] });
-  await h.service.saveReminderPreferences({ ...prefs, study: false, intervalMinutes: 1 });
-  assert.equal(h.calls.network, 1);
-  assert.equal(h.scheduled.size, 60);
-  const earliest = Math.min(...[...h.scheduled.values()].map(item => item.trigger.date.getTime()));
-  assert.ok(earliest > Date.now());
-  assert.ok(earliest <= Date.now() + 61000);
-  assert.match(await h.service.getReminderScheduleStatus(), /Next task reminder:/);
-});
-
-test('schedule status reports blocked permission and never implies delivery is enabled', async () => {
-  const h = harness({ granted: false });
-  assert.match(await h.service.getReminderScheduleStatus(), /Notifications are blocked/);
-});
-
-test('Android channel starts high with native sound and vibration and is initialized only once', async () => {
-  const h = harness();
-  const future = { ...task, dueDate: new Date(Date.now() + 3600000).toISOString() };
-  await h.capture(future); await h.capture(future);
-  assert.deepEqual(h.calls.channels, [{ id: 'vault_reminders', name: 'Task and study reminders', importance: 4, sound: 'default', enableVibrate: true, vibrationPattern: [0, 250, 150, 250], lockscreenVisibility: 0, bypassDnd: false }]);
-  for (const item of h.scheduled.values()) {
-    assert.equal(item.trigger.channelId, 'vault_reminders');
-    assert.equal(item.content.autoDismiss, true);
-    assert.equal(item.content.sticky, false);
-    assert.equal(item.content.data.presentation, 'vault-native-v1');
+test('web and older binaries do not call missing native notification APIs', async () => {
+  for (const h of [migration('web'), migration('android', false)]) {
+    await h.service.clearLocalReminders(); assert.equal(h.calls.cancelled.length, 0);
   }
 });
-test('existing user-disabled reminder channel is never recreated or overridden', async () => {
-  const h = harness({ existingChannel: { importance: 0, sound: null, enableVibrate: false } });
-  assert.match(await h.service.getReminderScheduleStatus(), /channel is blocked/);
-  assert.equal(h.calls.channels.length, 0);
-});
-
-test('existing plain notification requests migrate once to the native presentation channel', async () => {
-  const h = harness();
-  const future = { ...task, dueDate: new Date(Date.now() + 3600000).toISOString() };
-  await h.capture(future);
-  for (const request of h.scheduled.values()) {
-    delete request.content.data.presentation;
-    request.trigger.channelId = 'reminders';
+test('study activity is reported on web and mobile without scheduling local alerts', () => {
+  for (const platform of ['web', 'android']) {
+    const h = migration(platform);
+    h.service.recordSubjectStudyVisit({ _id: 'subject' });
+    h.service.recordStudyActivity('subject', 'topic', 'Private subject', 'Private topic');
+    assert.deepEqual(h.calls.activities, [{ kind: 'study', subjectId: 'subject' }, { kind: 'study', subjectId: 'subject', topicId: 'topic' }]);
+    assert.equal(h.calls.cancelled.length, 0);
   }
-  await h.capture(future);
-  assert.equal(h.calls.canceled, 60);
-  assert.equal(h.calls.scheduled, 120);
-  await h.capture(future);
-  assert.equal(h.calls.scheduled, 120);
-  assert.ok([...h.scheduled.values()].every(request => request.trigger.channelId === 'vault_reminders'));
+});
+function pushHarness({ granted = true, platform = 'android', stored = null, apiFailure = false } = {}) {
+  const calls = { requests: 0, registered: [], removed: [], channel: [] };
+  const values = new Map(stored ? [['vault-remote-push-device', JSON.stringify(stored)]] : []);
+  const service = compile('push.ts', {
+    'react-native': { Platform: { OS: platform } }, 'expo-device': { isDevice: true },
+    'expo-constants': { default: { easConfig: { projectId: 'project' } } },
+    'expo-secure-store': { getItemAsync: async key => values.get(key) || null, setItemAsync: async (key, value) => values.set(key, value), deleteItemAsync: async key => values.delete(key) },
+    '@/api/auth': { getAuthUser: async () => ({ id: 'owner' }) },
+    '@/api/client': { default: {
+      post: async (url, body) => { calls.registered.push(body); return { data: { data: { id: 'device' } } }; },
+      delete: async (url, config) => { calls.removed.push({ url, config }); if (apiFailure) throw Error('offline'); },
+    } },
+    './notificationModule': { loadNotifications: () => ({
+      AndroidImportance: { DEFAULT: 3 }, setNotificationChannelAsync: async id => calls.channel.push(id),
+      getPermissionsAsync: async () => ({ granted }), requestPermissionsAsync: async () => { calls.requests++; return { granted }; },
+      getDevicePushTokenAsync: async () => ({ data: 'native_fcm_token_for_test' }),
+      getExpoPushTokenAsync: async () => ({ data: 'ExpoPushToken[test]' }),
+    }) },
+  });
+  return { service, calls, values };
+}
+test('permission denial never registers a phone and never affects the inbox', async () => {
+  const h = pushHarness({ granted: false }); await assert.rejects(h.service.enablePush(), /Allow notifications/);
+  assert.equal(h.calls.registered.length, 0); assert.equal(h.calls.requests, 1);
+});
+test('push registration persists only the device reference and refresh never prompts', async () => {
+  const h = pushHarness(); await h.service.enablePush(); await h.service.refreshPushRegistration();
+  assert.deepEqual(await h.service.pushRegistration(), { id: 'device', userId: 'owner' });
+  assert.equal(h.calls.requests, 0); assert.equal(h.calls.registered.length, 2);
+  assert.equal(h.calls.registered[0].provider, 'fcm');
+  assert.equal(h.calls.registered[0].token, 'native_fcm_token_for_test');
+  assert.equal(h.calls.registered[1].previousDeviceId, 'device');
+  assert.ok(h.calls.channel.includes('vault_automatic'));
+  assert.ok(!JSON.stringify([...h.values.values()]).includes('ExpoPushToken'));
+});
+test('logout deregistration avoids recursive authentication failure and retains retry info offline', async () => {
+  const h = pushHarness({ stored: { id: 'device', userId: 'owner' }, apiFailure: true });
+  await assert.rejects(h.service.disablePush(), /offline/);
+  assert.ok(await h.service.pushRegistration());
+  assert.equal(h.calls.removed[0].config.__reminderSync, true);
+});
+test('notification deep links cannot navigate to external sites or arbitrary app routes', () => {
+  const { safeNotificationRoute } = compile('routes.ts');
+  const id = '507f1f77bcf86cd799439011';
+  for (const route of ['/todos', `/subjects/${id}?resumeTopicId=${id}`, `/interview/question/${id}`, '/games/path', '/puzzles']) assert.equal(safeNotificationRoute(route), route);
+  for (const route of ['https://evil.example', '//evil.example', '/passcodes', '/browser?url=https://evil.example', '/todos?redirect=https://evil.example', '/games/../../passcodes']) assert.equal(safeNotificationRoute(route), '/notifications');
 });
 
-test('short queues reserve hour and day study reminders alongside due tasks', () => {
-  const items = plan({ tasks: [{ ...task, dueDate: new Date(now - 60000).toISOString() }], study }, { ...prefs, intervalMinutes: 1 });
-  assert.equal(items.length, 60);
-  assert.equal(new Set(items.map(item => item.id)).size, 60);
-  const studies = items.filter(item => item.data.kind === 'study');
-  assert.ok(studies.some(item => item.at === now + 60000));
-  assert.ok(studies.some(item => item.at === now + 3 * 3600000 && item.body.includes('3 hours')));
-  for (let day = 1; day <= 7; day++) assert.ok(studies.some(item => item.at === now + day * 86400000));
-  assert.ok(studies.filter(item => item.at >= now + 86400000).every((item, index, daily) => !index || item.at - daily[index - 1].at === 86400000));
+test('rapid game completion is sent in order and is not suppressed by the idle heartbeat', async () => {
+  const states = []; let release;
+  const first = new Promise(resolve => { release = resolve; });
+  const activity = compile('activity.ts', {
+    react: {}, 'react-native': {},
+    '@/api/auth': { getAuthUser: async () => ({ id: 'owner' }), getAuthToken: async () => 'token', subscribeToAuthChanges() {} },
+    '@/api/client': { default: { post: async (_url, value) => { states.push(value.unfinished); if (states.length === 1) await first; } } },
+  });
+  const idle = activity.recordReminderActivity({ kind: 'game', key: 'path', unfinished: false });
+  await new Promise(resolve => setImmediate(resolve));
+  const start = activity.recordReminderActivity({ kind: 'game', key: 'path', unfinished: true });
+  const finish = activity.recordReminderActivity({ kind: 'game', key: 'path', unfinished: false });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(states, [false]);
+  release();
+  await Promise.all([idle, start, finish]);
+  assert.deepEqual(states, [false, true, false]);
+  await activity.recordReminderActivity({ kind: 'game', key: 'path', unfinished: false });
+  assert.deepEqual(states, [false, true, false]);
 });
-test('opening an unfinished subject starts native study reminders without needing resource links', async () => {
-  const h = harness();
-  await h.service.recordSubjectStudyVisit({ _id: 'subject1', subjectName: 'Physics', topics: [
-    { _id: 'done', topic: 'Finished', status: 'completed' },
-    { _id: 'pending', topic: 'Next', status: 'pending' },
-    { _id: 'current', topic: 'Gravity', status: 'in_progress' },
-  ] });
-  assert.ok(h.scheduled.size > 0);
-  assert.ok([...h.scheduled.values()].every(item => item.content.data.topicId === 'current'));
-  assert.match(await h.service.getReminderScheduleStatus(), /Next study reminder:/);
-});
-test('subject revisit preserves the last unfinished topic and resets inactivity timing', async () => {
-  const h = harness();
-  h.store.set('vault-reminder-data-owner', JSON.stringify({ tasks: [], study: { ...study, lastStudiedAt: Date.now() - 3 * 86400000 } }));
-  await h.service.recordSubjectStudyVisit({ _id: study.subjectId, subjectName: study.subjectName, topics: [
-    { _id: 'another', topic: 'Another topic', status: 'in_progress' },
-    { _id: study.topicId, topic: study.topicTitle, status: 'pending' },
-  ] });
-  const requests = [...h.scheduled.values()];
-  assert.ok(requests.length > 0);
-  assert.ok(requests.every(item => item.content.data.topicId === study.topicId));
-  const first = requests.sort((a,b) => a.trigger.date - b.trigger.date)[0];
-  assert.ok(first.trigger.date.getTime() >= Date.now() + 3 * 3600000 - 2000);
-  assert.ok(!first.content.body.includes('days'));
-});
-test('fully completed subjects cannot start study reminders', async () => {
-  const h = harness();
-  await h.service.recordSubjectStudyVisit({ _id: 'subject1', subjectName: 'Physics', topics: [{ _id: 'done', topic: 'Finished', isCompleted: true }] });
-  assert.equal(h.scheduled.size, 0);
-});
-test('task schedules do not conceal missing study activity in settings', async () => {
-  const h = harness();
-  await h.capture({ ...task, dueDate: new Date(Date.now() + 3600000).toISOString() });
-  const status = await h.service.getReminderScheduleStatus();
-  assert.match(status, /Next task reminder:/);
-  assert.match(status, /Study: open an unfinished subject or topic/);
+
+test('OTP validation errors preserve the signed-in session and reach the form', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/api/auth.js'), 'utf8');
+  const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  let rejectResponse, deletions = 0;
+  const api = { defaults: { headers: { common: { Authorization: 'Bearer session' } } }, interceptors: { response: { use(_success, reject) { rejectResponse = reject; } } } };
+  const imports = {
+    'react-native': { Platform: { OS: 'android' } },
+    'expo-secure-store': { deleteItemAsync: async () => { deletions++; } },
+    './client': { default: api, clearApiCache() {} },
+  };
+  new Function('exports', 'require', output)({}, name => imports[name]);
+  const error = { response: { status: 400, data: { message: 'Incorrect or expired OTP. Please try again or request a new code.' } }, config: { headers: { Authorization: 'Bearer session' } } };
+  await assert.rejects(rejectResponse(error), actual => actual === error);
+  assert.equal(deletions, 0);
+  assert.equal(api.defaults.headers.common.Authorization, 'Bearer session');
 });

@@ -1,3 +1,4 @@
+import { VaultPasswordOtp } from "./VaultPasswordOtp";
 import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import React, { useRef, useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -15,6 +16,7 @@ export function ChangeVaultPassword() {
   const theme = { ...baseTheme, backgroundElement: p.card, text: p.text, textSecondary: p.secondary, accent: p.accent, accentMuted: p.mint, border: p.border };
   const router = useRouter();
   const { status, changePassword } = useVault();
+  const [otp, setOtp] = useState("");
   const [open, setOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -24,7 +26,7 @@ export function ChangeVaultPassword() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const submitting = useRef(false);
-  const clear = () => { setCurrentPassword(""); setNewPassword(""); setConfirmation(""); setVisible({}); setFocused(null); setError(""); };
+  const clear = () => { setOtp(""); setCurrentPassword(""); setNewPassword(""); setConfirmation(""); setVisible({}); setFocused(null); setError(""); };
   const submit = async () => {
     if (submitting.current) return;
     if (!currentPassword) { setError("Enter your current vault password."); return; }
@@ -32,10 +34,11 @@ export function ChangeVaultPassword() {
     if (newPassword !== newPassword.trim()) { setError("The new password cannot start or end with spaces."); return; }
     if (newPassword === currentPassword) { setError("Choose a different password."); return; }
     if (newPassword !== confirmation) { setError("The new passwords do not match."); return; }
+    if (!/^\d{6}$/.test(otp)) { setError("Enter the 6-digit code sent to your email."); return; }
     submitting.current = true;
     setSaving(true); setError("");
     try {
-      await changePassword(currentPassword, newPassword);
+      await changePassword(currentPassword, newPassword, otp);
       clear(); setOpen(false); showSuccess({ title: "Vault Password Changed", message: "Use your new password next time you unlock your vault." });
     } catch (failure: unknown) {
       const apiError = failure as { response?: { data?: { message?: string } }; message?: string };
@@ -104,6 +107,7 @@ export function ChangeVaultPassword() {
                     {['Use at least 6 characters (longer is better)', 'Include a mix of letters, numbers and symbols', 'Avoid using personal information', 'Use a unique password not used elsewhere'].map(tip => <View key={tip} style={styles.tipRow}><Text style={[styles.bullet, { color: p.text }]}>•</Text><Text style={[styles.tipText, { color: p.dark ? p.secondary : '#3B484D' }]}>{tip}</Text></View>)}
                   </View>
                 </View>
+                <VaultPasswordOtp value={otp} onChange={setOtp} disabled={saving} />
                 {!!error && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.error, { color: theme.danger }]}>{error}</Text>}
                 <Pressable accessibilityRole="button" accessibilityLabel="Update vault password" accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => void submit()} style={({ pressed }) => [styles.button, { backgroundColor: p.dark ? '#29674F' : '#1B5844', opacity: saving || pressed ? 0.7 : 1 }]}>
                   {saving ? <ActivityIndicator accessibilityLabel="Updating password" color="#FFFFFF" /> : <><Text style={styles.buttonText}>Update Password</Text><Feather name="arrow-right" size={25} color="#FFFFFF" style={styles.buttonArrow} /></>}

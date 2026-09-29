@@ -5,7 +5,7 @@ const path = require('node:path');
 const ts = require('typescript');
 const axios = require('axios');
 const cacheModule = {};
-new Function('exports', ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/api/responseCache.js'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(cacheModule);
+new Function('exports', ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/api/responseCache.js'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText)(cacheModule);
 const response = (config, data) => ({ config, data, headers: {}, status: 200, statusText: 'OK' });
 function setup(adapter, options) { const api = axios.create({ adapter }); return { api, cache: cacheModule.installResponseCache(api, axios.getAdapter, options) }; }
 
@@ -60,4 +60,55 @@ test('failed and aborted requests do not poison cache; independent searches rema
   const controller = new AbortController(); controller.abort();
   await assert.rejects(api.get('/search', { signal: controller.signal }), error => axios.isCancel(error));
   assert.equal((await api.get('/search')).data.ok, true);
+});
+
+test('notification activity preserves unrelated cached and in-flight reads', async () => {
+  const calls = []; let release;
+  const { api } = setup(config => {
+    calls.push(config.url);
+    if (config.url === '/subjects/one') return new Promise(resolve => { release = () => resolve(response(config, { subject: true })); });
+    return Promise.resolve(response(config, { ok: true }));
+  });
+  await api.get('/todos'); await api.get('/notifications');
+  const subject = api.get('/subjects/one'); await new Promise(resolve => setImmediate(resolve));
+  await api.post('/notifications/activity', {});
+  release(); await subject;
+  await api.get('/todos'); await api.get('/subjects/one'); await api.get('/notifications');
+  assert.equal(calls.filter(url => url === '/todos').length, 1);
+  assert.equal(calls.filter(url => url === '/subjects/one').length, 1);
+  assert.equal(calls.filter(url => url === '/notifications').length, 2);
+});
+test('domain writes invalidate search/trash and late affected reads without clearing other resources', async () => {
+  const calls = []; let release;
+  const { api } = setup(config => {
+    calls.push(config.url);
+    if (config.method === 'get' && config.url === '/todos' && !release) return new Promise(resolve => { release = () => resolve(response(config, { old: true })); });
+    return Promise.resolve(response(config, { old: false }));
+  });
+  await api.get('/passcodes'); await api.get('/search'); await api.get('/trash');
+  const old = api.get('/todos'); await new Promise(resolve => setImmediate(resolve));
+  await api.put('/todos/id', {}); release(); await old;
+  assert.equal((await api.get('/todos')).data.old, false);
+  await api.get('/passcodes'); await api.get('/search'); await api.get('/trash');
+  assert.equal(calls.filter(url => url === '/passcodes').length, 1);
+  assert.equal(calls.filter(url => url === '/search').length, 2);
+  assert.equal(calls.filter(url => url === '/trash').length, 2);
+});
+test('read during an unfinished write is invalidated again when that write completes', async () => {
+  let finish; let reads = 0;
+  const { api } = setup(config => config.method === 'put'
+    ? new Promise(resolve => { finish = () => resolve(response(config, {})); })
+    : Promise.resolve(response(config, { version: ++reads })));
+  const write = api.put('/subjects/one', {}); await new Promise(resolve => setImmediate(resolve));
+  assert.equal((await api.get('/subjects/one')).data.version, 1);
+  finish(); await write;
+  assert.equal((await api.get('/subjects/one')).data.version, 2);
+});
+test('targeted refresh clears matching routes and retains unrelated responses', async () => {
+  const calls = [];
+  const { api, cache } = setup(async config => { calls.push(config.url); return response(config, {}); });
+  await api.get('/todos?status=pending'); await api.get('/todos/stats'); await api.get('/subjects');
+  cache.clear('/todos');
+  await api.get('/todos?status=pending'); await api.get('/todos/stats'); await api.get('/subjects');
+  assert.equal(calls.length, 5);
 });

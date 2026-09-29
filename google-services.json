@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "377548755669",
+    "project_id": "vault-c572d",
+    "storage_bucket": "vault-c572d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:377548755669:android:ab87333d5a8f947906885c",
+        "android_client_info": {
+          "package_name": "com.pranjal.vault"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_-2wL9vExfy6f1Wado-lmZ0tvGFAVb7Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

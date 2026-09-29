@@ -62,6 +62,9 @@ test('preview follows within a cell without committing moves and clears on cance
   assert.deepEqual(stroke.update(finger), []);
   assert.deepEqual(stroke.preview(finger), { from: point(0), to: finger });
   assert.deepEqual(stroke.update(finger), []);
+  // Return to the center so the next sample crosses an exact grid corner.
+  // From (90, 51), the line to cell 4 legally traverses cell 1 first.
+  stroke.update(point(0));
   stroke.update(point(4));
   assert.equal(stroke.preview(point(4)), null);
   stroke.end();

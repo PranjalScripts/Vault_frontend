@@ -2,11 +2,11 @@ import API, { forceRefresh } from "./client";
 
 export const googleLogin = (idToken) => API.post("/auth/google", { idToken }, { timeout: 60000 });
 
-/** @param {{ page?: number, limit?: number, search?: string, sort?: string }} [options] */
+/** @param {{ page?: number, limit?: number, search?: string, sort?: string, view?: "cards" | "full" }} [options] */
 export const getSubjects = (options = {}) =>
-  API.get("/subjects/getAll-subjects", { params: options });
+  API.get("/subjects/getAll-subjects", { params: { view: "cards", ...options } });
 
-export const refreshSubjects = () => forceRefresh("/subjects/getAll-subjects");
+export const refreshSubjects = () => forceRefresh("/subjects/getAll-subjects", { params: { view: "cards" } });
 
 export const getSubject = (id) => API.get(`/subjects/${id}`);
 
@@ -65,8 +65,8 @@ export const deleteTodo = (todoId) => API.delete(`/todos/${todoId}`);
 
 export const getVault = () => API.get("/vault", { cache: false, headers: { "Cache-Control": "no-cache" } });
 export const getFreshVault = () => forceRefresh("/vault", { cache: false, headers: { "Cache-Control": "no-cache" } });
-export const changeVaultPassword = ({ previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier }) =>
-  API.put("/vault/password", { previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier });
+export const changeVaultPassword = ({ previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier, otp }) =>
+  API.put("/vault/password", { previousPasswordSalt, passwordSalt, passwordWrappedVaultKey, verifier, otp });
 
 export const createVault = ({
   salt,
@@ -145,3 +145,5 @@ export const importSharedSubject = (token) => API.post(`/subjects/shared/${token
 
 // Solutions are authenticated and must not enter the response cache.
 export const getPuzzleAnswer = (id, signal) => API.get(`/puzzles/${encodeURIComponent(id)}/answer`, { cache: false, signal });
+
+export const sendVaultPasswordOtp = () => API.post("/vault/password/otp", {});

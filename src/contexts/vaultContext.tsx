@@ -43,7 +43,7 @@ type VaultContextType = {
 
   unlockVault: (vaultPassword: string) => Promise<boolean>;
 
-  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string, otp: string) => Promise<void>;
 
   lockVault: () => void;
 
@@ -482,11 +482,11 @@ export const VaultProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [vaultSalt]);
 
-  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string, otp: string) => {
     ++vaultGeneration.current;
     const response = await getFreshVault();
     const credentials = await rewrapVaultCredentials(currentPassword, newPassword, response.data.data);
-    await changeVaultPasswordApi(credentials);
+    await changeVaultPasswordApi({ ...credentials, otp });
     ++vaultGeneration.current;
     setVaultSalt(credentials.passwordSalt);
     setPasswordWrappedVaultKey(credentials.passwordWrappedVaultKey);

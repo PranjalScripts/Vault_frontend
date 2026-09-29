@@ -1,0 +1,22 @@
+// Retain the notification library's resources and existing RemoteViews layouts,
+// but replace the legacy launcher-size PNG in a generated resource directory.
+subprojects { notificationProject ->
+    if (notificationProject.name == 'expo-notifications') {
+        notificationProject.plugins.withId('com.android.library') {
+            def sourceResources = notificationProject.file('src/main/res')
+            def preparedResources = rootProject.layout.buildDirectory.dir('generated/vault-notification-resources')
+            def prepareResources = notificationProject.tasks.register('prepareVaultNotificationResources', Sync) {
+                from(sourceResources) { exclude '**/vault_notification_logo.png' }
+                from(rootProject.file('../assets/images/notification-icon.png')) {
+                    into 'drawable-nodpi'
+                    rename { 'vault_notification_logo.png' }
+                }
+                into preparedResources
+            }
+            notificationProject.android.sourceSets.main.res.setSrcDirs([preparedResources])
+            notificationProject.tasks.matching { it.name == 'preBuild' }.configureEach {
+                dependsOn prepareResources
+            }
+        }
+    }
+}

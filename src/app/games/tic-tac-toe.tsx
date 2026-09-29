@@ -1,3 +1,4 @@
+import { useGameCompletion, useGameReminderActivity } from "@/notifications/activity";
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { AppLayout } from '@/components/AppLayout';
@@ -9,6 +10,7 @@ import { WinningLine } from '@/features/ticTacToe/WinningLine';
 
 export default function TicTacToeScreen() {
   const theme = useTheme();
+  useGameReminderActivity("tic-tac-toe", true);
   const [space, setSpace] = useState({ width: 0, height: 0 });
   const [boardSpace, setBoardSpace] = useState({ width: 0, height: 0 });
   const size = Math.max(0, Math.min(360, boardSpace.width, boardSpace.height));
@@ -23,6 +25,7 @@ export default function TicTacToeScreen() {
   const winningLine = getWinningLine(board);
   const winner = calculateWinner(board);
   const isDraw = !winner && board.every(Boolean);
+  useGameCompletion("tic-tac-toe", !!winner || isDraw);
 
   useEffect(() => {
     if (mode === 'pve' && !xIsNext && !winner && !isDraw) {

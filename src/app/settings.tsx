@@ -1,3 +1,4 @@
+import { AppLockSettings } from "@/security/AppLock";
 import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { WebSettings } from "@/components/WebSettings";
 import React, { useState } from "react";
@@ -80,6 +81,7 @@ function AppSettingsScreen() {
             Customize, secure and stay productive.
           </Text>
         </ImageBackground>
+        <AppLockSettings />
         <ReminderSettings />
         <View style={[styles.card, card]}>
           <Pressable

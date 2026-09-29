@@ -1,5 +1,6 @@
+import { VaultPasswordOtp } from "./VaultPasswordOtp";
 import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,7 +11,8 @@ import {
   View,
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import ReminderSettings from "./ReminderSettings";
 import { AppLayout } from "./AppLayout";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -52,9 +54,14 @@ export function WebSettings() {
   const theme = useTheme();
   const preference = useThemePreference();
   const router = useRouter();
+  const { section: requestedSection } = useLocalSearchParams<{ section?: string }>();
   const wide = useWindowDimensions().width >= 1050;
   const [section, setSection] =
     useState<(typeof sections)[number]["id"]>("appearance");
+  useEffect(() => {
+    const target = sections.find(item => item.id === requestedSection);
+    if (target) setSection(target.id);
+  }, [requestedSection]);
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const selected = sections.find((item) => item.id === section)!;
@@ -267,25 +274,7 @@ export function WebSettings() {
               </View>
             )}
             {section === "security" && <WebPasswordForm />}
-            {section === "notifications" && (
-              <View style={s.panel}>
-                <View style={s.featureIcon}>
-                  <Feather name="smartphone" size={26} color={theme.accent} />
-                </View>
-                <Text style={s.panelTitle}>Reminders on your phone</Text>
-                <Text style={s.description}>
-                  Task and study reminders are scheduled by the Vault mobile
-                  app. Open Settings in the app to choose what to be reminded
-                  about and how often.
-                </Text>
-                <View style={s.note}>
-                  <Feather name="info" size={18} color={theme.textSecondary} />
-                  <Text style={s.description}>
-                    Browser notifications are not currently supported.
-                  </Text>
-                </View>
-              </View>
-            )}
+            {section === "notifications" && <ReminderSettings />}
             {section === "account" && (
               <View style={s.panel}>
                 <Text style={s.panelTitle}>Sign out of this session</Text>
@@ -336,6 +325,7 @@ function WebPasswordForm() {
   const s = createStyles(theme);
   const { status, changePassword } = useVault();
   const router = useRouter();
+  const [otp, setOtp] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [values, setValues] = useState({ current: "", next: "", confirm: "" });
   const [visible, setVisible] = useState<Record<string, boolean>>({});
@@ -343,6 +333,7 @@ function WebPasswordForm() {
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
   const clear = () => {
+    setOtp("");
     setValues({ current: "", next: "", confirm: "" });
     setVisible({});
     setError("");
@@ -369,21 +360,19 @@ function WebPasswordForm() {
       setError("The new passwords do not match.");
       return;
     }
+    if (!/^\d{6}$/.test(otp)) { setError("Enter the 6-digit code sent to your email."); return; }
     pending.current = true;
     setSaving(true);
     setError("");
 
     try {
-      await changePassword(values.current, values.next);
+      await changePassword(values.current, values.next, otp);
       clear();
       setExpanded(false);
       showSuccess({ title: "Vault Password Changed", message: "Use your new password next time you unlock your vault." });
     } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : "Unable to update your password. Please try again.",
-      );
+      const apiError = failure as { response?: { data?: { message?: string } }; message?: string };
+      setError(apiError.response?.data?.message || apiError.message || "Unable to update your password. Please try again.");
     } finally {
       pending.current = false;
       setSaving(false);
@@ -502,6 +491,7 @@ function WebPasswordForm() {
               Use at least 6 characters. A longer, unique password with letters,
               numbers, and symbols is better.
             </Text>
+            <VaultPasswordOtp value={otp} onChange={setOtp} disabled={saving} />
             {!!error && (
               <Text accessibilityRole="alert" style={s.error}>
                 {error}

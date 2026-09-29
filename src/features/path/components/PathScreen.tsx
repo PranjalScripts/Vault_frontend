@@ -1,3 +1,4 @@
+import { useGameCompletion, useGameReminderActivity } from "@/notifications/activity";
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,6 +16,7 @@ export default function PathScreen({ newPuzzle = false }: { newPuzzle?: boolean 
   const [contentWidth, setContentWidth] = useState(0);
   const wide = contentWidth >= 680;
   const current = newPuzzle ? null : game.state.game;
+  useGameReminderActivity("path", !newPuzzle && game.ready && !!current, !!current && !current.completed && current.path.length > 0);
   const pendingAttempt = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (newPuzzle && pendingAttempt.current !== undefined && game.state.game && game.state.game.attemptId !== pendingAttempt.current) {
@@ -24,6 +26,7 @@ export default function PathScreen({ newPuzzle = false }: { newPuzzle?: boolean 
     }
   }, [newPuzzle, game.state.game, router]);
   const openNewPuzzle = () => router.push('/games/path/new');
+  useGameCompletion("path", !!current?.completed, game.ready && !!current);
   const [completedGameId, setCompletedGameId] = useState<string | null>(null);
   useEffect(() => {
     setCompletedGameId(null);

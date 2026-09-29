@@ -1,17 +1,13 @@
-const { copyFileSync, existsSync, mkdirSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const path = require('node:path');
 
-// RemoteViews needs an Android resource, not a Metro asset URI.
-const root = path.resolve(__dirname, '..');
-const moduleRoot = path.dirname(require.resolve('expo-notifications/package.json'));
-const resources = path.join(moduleRoot, 'android/src/main/res/drawable-nodpi');
-const source = path.join(root, 'assets/images/adaptive-icon.png');
-if (!existsSync(source)) {
-  throw new Error('Missing assets/images/adaptive-icon.png. Include this tracked asset in the EAS build upload.');
+// Validate only. Gradle prepares resources outside node_modules at build time.
+const source = path.resolve(__dirname, '../assets/images/notification-icon.png');
+if (!existsSync(source)) throw new Error('Missing assets/images/notification-icon.png');
+const data = readFileSync(source);
+if (!data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
+    data.readUInt32BE(16) !== 96 || data.readUInt32BE(20) !== 96 ||
+    data[24] !== 8 || data[25] !== 6 || data.length > 32768) {
+  throw new Error('Notification icon must be a lightweight 96x96, 8-bit RGBA PNG');
 }
-mkdirSync(resources, { recursive: true });
-copyFileSync(
-  source,
-  path.join(resources, 'vault_notification_logo.png'),
-);
-console.log('Synced notification artwork from assets/images/adaptive-icon.png');
+console.log('Notification icon validated; dependency sources are untouched');

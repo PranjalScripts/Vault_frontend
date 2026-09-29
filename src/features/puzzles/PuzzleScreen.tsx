@@ -1,3 +1,5 @@
+import API from '@/api/client';
+import { useGameReminderActivity } from "@/notifications/activity";
 import React, { useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,9 +19,11 @@ export default function PuzzleScreen() {
 
 function PuzzleDetail({ puzzle }: { puzzle?: Puzzle }) {
   const theme = useGameTheme(), router = useRouter();
+  const [completed, setCompleted] = useState(false), [saving, setSaving] = useState(false), [completionError, setCompletionError] = useState('');
   const [revealed, setRevealed] = useState(false);
   const access = usePuzzleAccess(puzzle?.id);
   const { answer } = access;
+  useGameReminderActivity("puzzles", access.authenticated === true && !!puzzle);
   const login = () => router.push({ pathname: '/onboarding', params: { puzzleId: puzzle?.id } });
   const index = puzzles.findIndex(item => item.id === puzzle?.id);
   const textStyle = { color: theme.text, fontSize: 15, lineHeight: 23 };
@@ -48,6 +52,8 @@ function PuzzleDetail({ puzzle }: { puzzle?: Puzzle }) {
         }} style={({ pressed }) => ({ minHeight: 48, padding: 12, borderRadius: 14, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', opacity: pressed || access.loading ? .75 : 1 })}><Text style={{ color: theme.background, fontSize: 15, fontWeight: '700' }}>{access.authenticated === null ? 'Checking sign-in…' : !access.authenticated ? 'Sign in to view answer' : access.loading ? 'Loading solution…' : revealed && answer ? 'Hide solution' : 'Reveal answer & solution'}</Text></Pressable>
         {!!access.error && <Text accessibilityLiveRegion="polite" style={{ color: theme.danger }}>{access.error}</Text>}
         {access.authenticated && revealed && answer && <View style={{ gap: 16 }}>
+          <Pressable accessibilityRole="button" disabled={saving || completed} onPress={() => { setSaving(true); setCompletionError(''); void API.post('/notifications/activity', { kind: 'game', key: 'puzzles', unfinished: false, completed: true }).then(() => setCompleted(true)).catch(() => setCompletionError('Could not save completion. Please retry.')).finally(() => setSaving(false)); }} style={{ padding: 14, borderRadius: 12, backgroundColor: theme.accentMuted }}><Text style={{ color: theme.accent }}>{completed ? 'Completed today' : saving ? 'Saving…' : 'Mark puzzle completed'}</Text></Pressable>
+          {!!completionError && <Text accessibilityRole="alert" style={{ color: theme.danger }}>{completionError}</Text>}
           <View style={{ backgroundColor: theme.accentMuted, padding: 16, borderRadius: 16, gap: 8 }}><Text accessibilityRole="header" style={heading}>Answer</Text><Text selectable style={textStyle}>{answer.answer}</Text></View>
           {!!answer.visual && <PuzzleDiagram visual={answer.visual} />}
           {!!answer.visualNotice && <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{answer.visualNotice}</Text>}

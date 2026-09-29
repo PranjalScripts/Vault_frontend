@@ -42,3 +42,10 @@ example
 # generated native folders
 /ios
 /android
+
+# Stage the release APK here before deploying, or configure a hosted download URL.
+/public/downloads/*.apk
+
+# Server-side Firebase credentials must never be committed.
+*service-account*.json
+*firebase-adminsdk*.json

@@ -1,7 +1,10 @@
+import { AppLockProvider } from "@/security/AppLock";
 import { FeedbackModalProvider } from "@/contexts/FeedbackModalContext";
 import { VaultProvider } from "@/contexts/vaultContext";
 import NoDataConnection from "@/components/NoDataConnection";
+import { NotificationProvider } from "@/notifications/inbox";
 import NotificationObserver from "@/components/NotificationObserver";
+import SharedAppBanner from "@/components/SharedAppBanner";
 import {
   DarkTheme,
   DefaultTheme,
@@ -28,7 +31,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
 import { useThemePreferenceReady } from "@/state/theme-preference";
-const PROTECTED_ROUTES = ["interview", "subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games"];
+const PROTECTED_ROUTES = ["interview", "subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games", "notifications", "reminders", "updates"];
 
 // Google redirects to the origin on web, so completion must run on every route.
 // Expo validates the stored redirect URL; AuthSession validates OAuth state.
@@ -208,11 +211,14 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={navigationTheme}>
+      <AppLockProvider>
       <VaultProvider>
       <FeedbackModalProvider>
+      <NotificationProvider ready={isReady && isAuthenticated}>
         <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         <View style={{ flex: 1, backgroundColor: theme.background }} onLayout={() => setRootLaidOut(true)}>
         <View style={{ flex: 1, opacity: routeReady ? 1 : 0 }} pointerEvents={routeReady ? "auto" : "none"}>
+        <SharedAppBanner />
         <Stack
           screenOptions={{
             // Do not animate the initial redirect behind the launch screen.
@@ -327,6 +333,7 @@ export default function RootLayout() {
 
           <Stack.Screen name="whatsapp" options={{ headerShown: false, title: "WhatsApp" }} />
 
+          <Stack.Screen name="notifications" options={{ headerShown: false, title: "Notifications" }} />
           <Stack.Screen name="settings" options={{ headerShown: false, title: "Settings" }} />
 
           <Stack.Screen
@@ -347,8 +354,10 @@ export default function RootLayout() {
         <Toast />
         <NotificationObserver ready={isReady && isAuthenticated && startupComplete && !!navigationState?.key && !redirectTarget} />
         <NoDataConnection />
+      </NotificationProvider>
       </FeedbackModalProvider>
       </VaultProvider>
+      </AppLockProvider>
     </ThemeProvider>
   );
 }

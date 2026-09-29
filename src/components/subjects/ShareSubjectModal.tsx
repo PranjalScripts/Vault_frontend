@@ -67,7 +67,7 @@ export function ShareSubjectModal({ selection, onClose }: {
   }
   return (
     <FormModal visible={!!selection} title={selection?.topic ? "Share topic" : "Share entire subject"}
-      subtitle="Anyone with this link can view the shared content on our website without signing in. Changes you make will appear there too."
+      subtitle="Anyone with this link can view the shared content in Vault or their browser without signing in. Changes you make will appear there too."
       onClose={() => { if (!busy) onClose(); }}>
       {loading && <Text style={{ color: t.textSecondary }}>Creating share link…</Text>}
       {!!url && <>

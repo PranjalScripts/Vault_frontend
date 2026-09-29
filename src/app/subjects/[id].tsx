@@ -1,3 +1,5 @@
+import { ReminderButton } from "@/components/ReminderButton";
+import { recordReminderActivity } from "@/notifications/activity";
 import { useFeedbackModal } from "@/contexts/FeedbackModalContext";
 import { ConfirmModal } from "@/components/modals/ConfirmModal";
 import { ShareSubjectModal, ShareSelection } from "@/components/subjects/ShareSubjectModal";
@@ -204,6 +206,7 @@ export default function SubjectDetailScreen() {
     try {
       const response = await updateTopic(id, topic._id, { status: next });
       setSubject(response.data.data);
+      if (next === "completed") void recordReminderActivity({ kind: "study", subjectId: id, topicId: topic._id, completed: true });
       if (next === "in_progress") recordStudyActivity(id, topic._id, subject?.subjectName, topic.topic);
       setTopicMenu(null);
       showSuccess({ title: "Topic Updated", message: "The topic status has been saved." });
@@ -851,6 +854,7 @@ export default function SubjectDetailScreen() {
           </>
         )}
       </View>
+      {subject && <ReminderButton entityType="subject" entityId={id} label={subject.subjectName} />}
       <FormModal visible={showNotes && !!subject} title={`${subject?.subjectName || "Subject"} notes`} subtitle="Your saved subject notes." onClose={() => { setShowNotes(false); router.setParams({ section: "" }); }}>
         <Text selectable style={{ color: t.text, lineHeight: 24 }}>{subject?.notes || "No notes saved for this subject."}</Text>
       </FormModal>
@@ -892,6 +896,7 @@ export default function SubjectDetailScreen() {
             }}
           />
         ))}
+        {topicMenu && topicStatus(topicMenu) !== "completed" && <ReminderButton entityType="subject" entityId={id} topicId={topicMenu._id} label={topicMenu.topic} />}
         <Button secondary label="Share topic" disabled={busy} onPress={() => {
           if (subject && topicMenu) { setSharing({ subject, topic: topicMenu }); setTopicMenu(null); }
         }} />

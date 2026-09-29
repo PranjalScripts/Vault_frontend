@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, { useAnimatedProps, useSharedValue } from 'react-native-reanimated';
 import { PathStroke } from '../engine/stroke';
 import { useGameTheme as useTheme } from '@/features/games/GameUI';
 import { PathPuzzle, indexOf } from '../engine/types';
-import { PathSegment } from './PathSegment';
+import Svg, { Path } from 'react-native-svg';
+import { strokePath } from '../engine/visualStroke';
+import type { StrokePoint } from '../engine/stroke';
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 type Props = { size: number; puzzle: PathPuzzle; path: number[]; hint: number | null; invalid: number | null; disabled: boolean; onEnterCells: (cells: number[]) => void };
 export function PathBoard(props: Props) {
   const theme = useTheme(), width = props.size;
@@ -13,25 +16,22 @@ export function PathBoard(props: Props) {
   const boardWidth = useRef(0), stroke = useRef(new PathStroke());
   boardWidth.current = Math.max(0, width - 2);
   const { puzzle, path } = props, cellSize = Math.max(0, width - 2) / puzzle.cols;
-  const preview = useSharedValue({ x: 0, y: 0, length: 0, angle: 0, visible: false });
-  const previewStyle = useAnimatedStyle(() => ({
-    left: preview.value.x, top: preview.value.y, width: preview.value.length,
-    opacity: preview.value.visible ? 1 : 0,
-    transform: [{ rotate: `${preview.value.angle}rad` }],
-  }));
+  // One atomic snapshot prevents a new tail being paired with an older route.
+  // Pointer samples update animated SVG props, never React board state.
+  const visual = useSharedValue<{ cells: readonly number[]; finger: StrokePoint | null; cols: number; cellSize: number }>({ cells: path, finger: null, cols: puzzle.cols, cellSize });
+  const animatedProps = useAnimatedProps(() => ({ d: strokePath(visual.value.cells, visual.value.cols, visual.value.cellSize, visual.value.finger) }));
   const finish = useCallback(() => {
+    if (stroke.current.active) {
+      visual.value = { ...visual.value, cells: [...stroke.current.confirmedPath], finger: null };
+    }
     stroke.current.end();
-    preview.value = { ...preview.value, visible: false };
-  }, [preview]);
-  const updatePreview = useCallback((point: { x: number; y: number }) => {
+  }, [visual]);
+  const updatePreview = useCallback((point: StrokePoint) => {
+    if (!stroke.current.active) return;
     const segment = stroke.current.preview(point);
-    if (!segment) { preview.value = { ...preview.value, visible: false }; return; }
-    const dx = segment.to.x - segment.from.x, dy = segment.to.y - segment.from.y;
-    const length = Math.hypot(dx, dy), thickness = Math.max(7, boardWidth.current / latest.current.puzzle.cols * .2);
-    preview.value = { x: (segment.from.x + segment.to.x) / 2 - length / 2,
-      y: (segment.from.y + segment.to.y) / 2 - thickness / 2,
-      length, angle: Math.atan2(dy, dx), visible: true };
-  }, [preview]);
+    visual.value = { cells: [...stroke.current.confirmedPath], finger: segment?.to ?? null,
+      cols: latest.current.puzzle.cols, cellSize: boardWidth.current / latest.current.puzzle.cols };
+  }, [visual]);
   const gesture = useMemo(() => {
     // The bounded page has no scroll handler competing with the board gesture.
     const pan = Gesture.Pan().minDistance(0).maxPointers(1).shouldCancelWhenOutside(false)
@@ -57,7 +57,14 @@ export function PathBoard(props: Props) {
       updatePreview(point);
     }).onUpdate(update).onEnd(update).onFinalize(finish);
   }, [finish, updatePreview]);
-  useEffect(() => { finish(); return finish; }, [puzzle.id, props.disabled, width, finish]);
+  useLayoutEffect(() => { finish(); return finish; }, [puzzle.id, props.disabled, width, finish]);
+  useLayoutEffect(() => {
+    // Undo/replay/restored games use the same overlay when no drag is active.
+    if (!stroke.current.active || !path.length) {
+      stroke.current.end();
+      visual.value = { cells: path, finger: null, cols: puzzle.cols, cellSize };
+    }
+  }, [path, puzzle.id, puzzle.cols, cellSize, props.disabled, visual]);
   const checkpoints = new Map(puzzle.checkpoints.map(c => [indexOf(c.position, puzzle.cols), c.number]));
   const blocked = new Set(puzzle.blockedCells.map(c => indexOf(c, puzzle.cols))), visited = new Set(path);
   const thickness = Math.max(7, cellSize * .2);
@@ -70,21 +77,18 @@ export function PathBoard(props: Props) {
         onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'activate' && !props.disabled && !isBlocked) props.onEnterCells([cell]); }}
         accessibilityLabel={`Row ${Math.floor(cell / puzzle.cols) + 1}, column ${cell % puzzle.cols + 1}${number ? `, checkpoint ${number}` : ''}${isBlocked ? ', blocked' : ''}${visited.has(cell) ? ', visited' : ''}`}
         style={{ position: 'absolute', left: cell % puzzle.cols * cellSize, top: Math.floor(cell / puzzle.cols) * cellSize, width: cellSize, height: cellSize, borderWidth: .5, borderColor: theme.border,
-          backgroundColor: isBlocked ? theme.backgroundSelected : props.invalid === cell ? `${theme.danger}25` : props.hint === cell ? theme.accentMuted : visited.has(cell) ? `${theme.accent}14` : 'transparent' }}>
+          backgroundColor: isBlocked ? theme.backgroundSelected : props.invalid === cell ? `${theme.danger}25` : props.hint === cell ? theme.accentMuted : 'transparent' }}>
         {isBlocked && <Text style={{ color: theme.textSecondary, textAlign: 'center', lineHeight: cellSize, fontSize: 20 }}>×</Text>}
       </View>;
     })}
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {path.slice(1).map((cell, i) => {
-        const prev = path[i], x = (cell % puzzle.cols + .5) * cellSize, y = (Math.floor(cell / puzzle.cols) + .5) * cellSize;
-        const px = (prev % puzzle.cols + .5) * cellSize, py = (Math.floor(prev / puzzle.cols) + .5) * cellSize;
-        return <PathSegment key={`${prev}-${cell}`} style={{ position: 'absolute', left: Math.min(x, px) - thickness / 2, top: Math.min(y, py) - thickness / 2, width: Math.abs(x - px) + thickness, height: Math.abs(y - py) + thickness, backgroundColor: theme.accent, borderRadius: thickness }} />;
-      })}
-      <Animated.View style={[{ position: 'absolute', height: thickness, borderRadius: thickness, backgroundColor: theme.accent }, previewStyle]} />
+      <Svg pointerEvents="none" width={cellSize * puzzle.cols} height={cellSize * puzzle.rows} style={StyleSheet.absoluteFill}>
+        <AnimatedPath testID="path-continuous-stroke" animatedProps={animatedProps} fill="none"
+          stroke={theme.accent} strokeWidth={thickness} strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
       {Array.from(checkpoints).map(([cell, number]) => <View key={cell} style={{ position: 'absolute', left: (cell % puzzle.cols + .5) * cellSize - cellSize * .3, top: (Math.floor(cell / puzzle.cols) + .5) * cellSize - cellSize * .3, width: cellSize * .6, height: cellSize * .6, borderRadius: cellSize, backgroundColor: visited.has(cell) ? theme.accent : theme.backgroundElement, borderWidth: 2, borderColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: visited.has(cell) ? theme.background : theme.text, fontWeight: '800', fontSize: Math.max(8, cellSize * .27) }}>{number}</Text>
       </View>)}
-      {path.length > 0 && !checkpoints.has(path[path.length - 1]) && <View style={{ position: 'absolute', left: (path[path.length - 1] % puzzle.cols + .5) * cellSize - 6, top: (Math.floor(path[path.length - 1] / puzzle.cols) + .5) * cellSize - 6, width: 12, height: 12, borderRadius: 6, backgroundColor: theme.background, borderWidth: 3, borderColor: theme.accent }} />}
       {puzzle.walls.map((wall, i) => {
         const vertical = wall.from.row === wall.to.row;
         return <View key={i} style={{ position: 'absolute', backgroundColor: theme.text,

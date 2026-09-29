@@ -105,6 +105,12 @@ export const getAuthUser = async () => {
 export const logout = async () => {
   if (Platform.OS !== "web") {
     try {
+      const { disablePush } = await import("@/notifications/push");
+      await disablePush();
+    } catch { console.warn("Phone alert deregistration could not reach the server."); }
+  }
+  if (Platform.OS !== "web") {
+    try {
       const { clearLocalReminders } = await import("@/notifications/reminders");
       await clearLocalReminders();
     } catch {

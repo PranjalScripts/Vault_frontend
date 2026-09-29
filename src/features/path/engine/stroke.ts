@@ -31,6 +31,8 @@ export class PathStroke {
   private previous: StrokePoint | null = null;
   private size = 0;
   get active() { return this.puzzle !== null; }
+  // The gesture's authoritative route, independent of React's render timing.
+  get confirmedPath(): readonly number[] { return this.path; }
   preview(point: StrokePoint) {
     const p = this.puzzle;
     if (!p || !this.previous || !this.path.length || this.cell(point) !== this.path[this.path.length - 1]) return null;

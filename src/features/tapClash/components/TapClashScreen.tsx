@@ -1,3 +1,4 @@
+import { useGameCompletion, useGameReminderActivity } from "@/notifications/activity";
 import React, { useEffect, useState } from 'react';
 import { AccessibilityInfo, BackHandler, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -12,6 +13,8 @@ import { Countdown } from './Countdown';
 import { ResultOverlay } from './ResultOverlay';
 export default function TapClashScreen() {
   const theme = useTheme(), router = useRouter(), game = useTapClash();
+  useGameReminderActivity("tap-clash", true);
+  useGameCompletion("tap-clash", game.phase === "result");
   const [settings, setSettings] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const pause = game.pause;
