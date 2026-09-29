@@ -18,7 +18,6 @@ export default function NotificationObserver({ ready }: { ready: boolean }) {
     let cleanup = () => {};
     const refresh = () => { void refreshPushRegistration().catch(() => console.warn("Phone alert registration will retry when Vault opens.")); };
     void clearLocalReminders().catch(() => console.warn("Could not clear legacy local reminders."));
-    refresh();
     const appState = AppState.addEventListener("change", state => { if (state === "active") refresh(); });
     void Promise.resolve().then(loadNotifications).then(async Notifications => {
       const user = await getAuthUser();
@@ -44,7 +43,7 @@ export default function NotificationObserver({ ready }: { ready: boolean }) {
               const result = await forceRefresh(`/notifications/${data.notificationId}`);
               const current = await getAuthUser();
               if (!active || data.userId !== String(current?.id || current?._id)) return;
-              route = safeNotificationRoute(result.data.data.route);
+              route = safeNotificationRoute(result.data.data.route, data.notificationId);
               await API.patch(`/notifications/${data.notificationId}/read`);
             }
           } catch { /* Offline/deleted notification: the inbox remains a safe fallback. */ }
@@ -58,6 +57,7 @@ export default function NotificationObserver({ ready }: { ready: boolean }) {
           router.push({ pathname: "/subjects/[id]", params: { id: data.subjectId, resumeTopicId: data.topicId } });
         }
       };
+      refresh();
       const tokenListener = Notifications.addPushTokenListener(() => refresh());
       const received = Notifications.addNotificationReceivedListener(() => { void refreshInbox(); });
       const listener = Notifications.addNotificationResponseReceivedListener(response => { void handle(response); });

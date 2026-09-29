@@ -1,0 +1,6 @@
+{
+  "name": "vault-screen-lock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vault device lock lifecycle signals"
+}

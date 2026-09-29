@@ -65,3 +65,11 @@ test('loading an already completed game does not establish a streak', async () =
   activity.useGameCompletion('path', false, true); activity.useGameCompletion('path', true, true); await tick();
   assert.deepEqual(saved, [{ kind: 'game', key: 'path', unfinished: false, completed: true }]);
 });
+
+test('security deep links retain only valid notification identifiers', () => {
+  const { safeNotificationRoute } = compile('notifications/routes.ts', {});
+  const valid = '/settings?section=security&notificationId=' + 'a'.repeat(24);
+  assert.equal(safeNotificationRoute(valid), valid);
+  assert.equal(safeNotificationRoute('/settings?section=security&notificationId=bad'), '/notifications');
+  assert.equal(safeNotificationRoute(valid + '&redirect=https://evil.invalid'), '/notifications');
+});

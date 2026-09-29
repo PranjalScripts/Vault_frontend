@@ -1,11 +1,14 @@
 import API from '@/api/client';
 import { randomUUID } from 'expo-crypto';
 import React, { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
-import { ActivityIndicator, AppState, Modal, Platform, Pressable, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Modal, Platform, Pressable, Text, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import Feather from '@expo/vector-icons/Feather';
+import { SettingsRow, SettingsSwitch } from '@/components/settings/SettingsPrimitives';
+import { useSettingsPalette } from '@/hooks/use-settings-palette';
 import { useTheme } from '@/hooks/use-theme';
+import { observeScreenLock } from './screenLock';
 import { createAppLockController } from './appLockController';
 
 const KEY = 'vault-device-app-lock-v1';
@@ -41,12 +44,13 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   useEffect(() => {
     if (Platform.OS === 'web') return;
+    const stopScreenLock = observeScreenLock(controller.screenLocked);
     controller.foreground(AppState.currentState === 'active');
     void controller.initialize();
     const subscription = AppState.addEventListener('change', value => controller.foreground(value === 'active'));
-    return () => subscription.remove();
+    return () => { subscription.remove(); stopScreenLock(); };
   }, []);
-  const covered = Platform.OS !== 'web' && (!state.ready || state.locked);
+  const covered = Platform.OS !== 'web' && (!state.ready || state.locked || (state.enabled && state.backgrounded));
   return <Context.Provider value={controller}>
     <View style={{ flex: 1 }} pointerEvents={covered ? 'none' : 'auto'} accessibilityElementsHidden={covered} importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}>{children}</View>
     <Modal visible={covered} animationType="none" presentationStyle="fullScreen" onRequestClose={() => {}} statusBarTranslucent>
@@ -66,13 +70,12 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 export function AppLockSettings() {
   const lock = useContext(Context);
   const state = useSyncExternalStore(lock.subscribe, lock.snapshot, lock.snapshot);
-  const theme = useTheme();
+  const p = useSettingsPalette();
   if (Platform.OS === 'web') return null;
-  return <View style={{ backgroundColor: theme.backgroundElement, borderColor: theme.border, borderWidth: 1, borderRadius: 18, padding: 18, gap: 12 }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-      <Feather name="shield" size={25} color={theme.accent} />
-      <View style={{ flex: 1 }}><Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>Fingerprint & device lock</Text><Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 4 }}>Require phone authentication when opening or returning to Vault.</Text></View>
-      <Switch accessibilityLabel="Fingerprint and device app lock" value={state.enabled} disabled={!state.ready || state.busy} onValueChange={value => {
+  return <View style={{ gap: 8 }}>
+    <SettingsRow title="Fingerprint & device lock" icon="finger-print-outline" compact
+      description="Lock when your phone locks or after two minutes away. Brief app switches stay unlocked."
+      trailing={<SettingsSwitch label="Fingerprint and device app lock" value={state.enabled} disabled={!state.ready || state.busy} onChange={value => {
         const before = lock.snapshot().enabled;
         void lock.setEnabled(value).then(async () => {
           if (before !== value && lock.snapshot().enabled === value) {
@@ -80,9 +83,7 @@ export function AppLockSettings() {
             catch { console.warn('Device security changed; its notification could not be saved.'); }
           }
         });
-      }} trackColor={{ true: theme.accent }} />
-    </View>
-    <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18 }}>Applies to this phone. Your vault password is still required to unlock saved passcodes.</Text>
-    {!!state.error && <Text accessibilityRole="alert" style={{ color: theme.danger, fontSize: 13 }}>{state.error}</Text>}
+      }} />} />
+    {!!state.error && <Text accessibilityRole="alert" style={{ color: p.danger, fontSize: 13, lineHeight: 19, paddingHorizontal: 8 }}>{state.error}</Text>}
   </View>;
 }

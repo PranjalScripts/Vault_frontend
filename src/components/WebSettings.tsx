@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import SecurityActivity from "./SecurityActivity";
 import ReminderSettings from "./ReminderSettings";
 import { AppLayout } from "./AppLayout";
 import { useTheme } from "@/hooks/use-theme";
@@ -54,14 +55,14 @@ export function WebSettings() {
   const theme = useTheme();
   const preference = useThemePreference();
   const router = useRouter();
-  const { section: requestedSection } = useLocalSearchParams<{ section?: string }>();
+  const { section: requestedSection, notificationId } = useLocalSearchParams<{ section?: string; notificationId?: string }>();
   const wide = useWindowDimensions().width >= 1050;
   const [section, setSection] =
-    useState<(typeof sections)[number]["id"]>("appearance");
+    useState<(typeof sections)[number]["id"]>(() => sections.find(item => item.id === requestedSection)?.id || "appearance");
   useEffect(() => {
     const target = sections.find(item => item.id === requestedSection);
     if (target) setSection(target.id);
-  }, [requestedSection]);
+  }, [requestedSection, notificationId]);
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const selected = sections.find((item) => item.id === section)!;
@@ -103,6 +104,7 @@ export function WebSettings() {
                 accessibilityState={{ selected: section === item.id }}
                 onPress={() => {
                   setSection(item.id);
+                  router.setParams({ section: item.id, notificationId: '' });
                   setError("");
                 }}
                 style={({ pressed }) => [
@@ -273,7 +275,7 @@ export function WebSettings() {
                 </View>
               </View>
             )}
-            {section === "security" && <WebPasswordForm />}
+            {section === "security" && <><SecurityActivity /><WebPasswordForm /></>}
             {section === "notifications" && <ReminderSettings />}
             {section === "account" && (
               <View style={s.panel}>

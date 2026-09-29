@@ -10,13 +10,37 @@ function setup(overrides = {}) {
   const lock = createAppLockController({ read: async () => true, write: async value => writes.push(value), available: async () => true, authenticate: async () => ({ success: true }), ...overrides });
   return { lock, writes };
 }
-test('enabled app stays locked on cold start, unlocks after OS verification, and locks on background', async () => {
-  const { lock } = setup();
-  assert.equal(lock.snapshot().locked, true);
+test('cold starts lock but brief app switches preserve a verified unlock', async () => {
+  let time = 0;
+  const { lock } = setup({ now: () => time });
   await lock.initialize(); assert.equal(lock.snapshot().locked, true);
   await lock.unlock(); assert.equal(lock.snapshot().locked, false);
-  lock.foreground(false); assert.equal(lock.snapshot().locked, true);
-  lock.foreground(true); assert.equal(lock.snapshot().locked, true);
+  lock.foreground(false); assert.equal(lock.snapshot().backgrounded, true);
+  time = 119999;
+  lock.foreground(true); assert.equal(lock.snapshot().locked, false);
+  assert.equal(lock.snapshot().backgrounded, false);
+});
+test('two minutes away locks even when JS timers were suspended', async () => {
+  let time = 0;
+  const { lock } = setup({ now: () => time });
+  await lock.initialize(); await lock.unlock();
+  lock.foreground(false); time = 60000; lock.foreground(false);
+  time = 120000; lock.foreground(true);
+  assert.equal(lock.snapshot().locked, true);
+});
+test('screen locking cancels grace and late authentication cannot override it', async () => {
+  let resolve;
+  const { lock } = setup({ authenticate: () => new Promise(done => { resolve = done; }) });
+  await lock.initialize();
+  const attempt = lock.unlock(); await Promise.resolve();
+  lock.screenLocked(); resolve({ success: true }); await attempt;
+  assert.equal(lock.snapshot().locked, true);
+});
+test('screen-off locks a previously unlocked app during a brief switch', async () => {
+  const { lock } = setup();
+  await lock.initialize(); await lock.unlock();
+  lock.foreground(false); lock.screenLocked(); lock.foreground(true);
+  assert.equal(lock.snapshot().locked, true);
 });
 test('cancelled authentication keeps the app locked and does not disable the setting', async () => {
   const { lock, writes } = setup({ authenticate: async () => ({ success: false, error: 'user_cancel' }) });
@@ -55,4 +79,15 @@ test('overlapping prompts are suppressed and late results cannot unlock a backgr
   lock.foreground(false); resolve({ success: true }); await attempt;
   assert.equal(calls, 1); assert.equal(lock.snapshot().locked, true);
   lock.foreground(true); assert.equal(lock.snapshot().locked, true);
+});
+
+test('screen lock during persistence cannot expose a newly enabled app lock', async () => {
+  let resolve, started;
+  const writing = new Promise(done => { started = done; });
+  const { lock } = setup({ read: async () => false, write: () => { started(); return new Promise(done => { resolve = done; }); } });
+  await lock.initialize();
+  const enabling = lock.setEnabled(true); await writing;
+  lock.screenLocked(); resolve(); await enabling;
+  assert.equal(lock.snapshot().enabled, true);
+  assert.equal(lock.snapshot().locked, true);
 });

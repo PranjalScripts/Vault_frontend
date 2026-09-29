@@ -49,3 +49,6 @@ example
 # Server-side Firebase credentials must never be committed.
 *service-account*.json
 *firebase-adminsdk*.json
+build
+android
+ios

@@ -7,13 +7,19 @@ import { getAuthUser } from '@/api/auth';
 import { loadNotifications } from './notificationModule';
 
 const KEY = 'vault-remote-push-device';
+const OPT_OUT = 'vault-remote-push-opt-out';
 type Registration = { id: string; userId: string };
 export async function pushRegistration(): Promise<Registration | null> {
   if (Platform.OS === 'web') return null;
   const raw = await SecureStore.getItemAsync(KEY);
   try { return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
-export async function disablePush() {
+export async function disablePush(userInitiated = true) {
+  if (userInitiated && Platform.OS !== 'web') {
+    const user = await getAuthUser();
+    const userId = String(user?._id || user?.id || '');
+    if (userId) await SecureStore.setItemAsync(OPT_OUT, userId);
+  }
   const registered = await pushRegistration();
   if (!registered) return;
   const config = { timeout: 10000, __reminderSync: true };
@@ -41,17 +47,34 @@ export async function enablePush(requestPermission = true) {
   const current = await getAuthUser();
   if (String(current?._id || current?.id || '') !== userId) return;
   const response = await API.post('/notifications/devices', { token, platform: Platform.OS, provider, ...(Constants.expoConfig?.version ? { appVersion: Constants.expoConfig.version } : {}), previousDeviceId: previous?.userId === userId ? previous.id : undefined }, { timeout: 10000 });
+  const latest = await getAuthUser();
+  if (String(latest?._id || latest?.id || '') !== userId) return;
   await SecureStore.setItemAsync(KEY, JSON.stringify({ id: response.data.data.id, userId }));
+  await SecureStore.deleteItemAsync(OPT_OUT);
 }
-export async function refreshPushRegistration() {
-  const saved = await pushRegistration();
-  if (!saved) return;
+let refreshing: Promise<void> | null = null;
+export function refreshPushRegistration(): Promise<void> {
+  if (refreshing) return refreshing;
+  refreshing = refreshRegistration().finally(() => { refreshing = null; });
+  return refreshing;
+}
+async function refreshRegistration() {
+  if (Platform.OS === 'web' || !Device.isDevice) return;
   const user = await getAuthUser();
-  if (saved.userId !== String(user?._id || user?.id || '')) {
-    // Reassign this installation's token only after explicit opt-in by its new owner.
-    await SecureStore.deleteItemAsync(KEY); return;
+  const userId = String(user?._id || user?.id || '');
+  if (!userId || await SecureStore.getItemAsync(OPT_OUT) === userId) return;
+  const saved = await pushRegistration();
+  if (saved && saved.userId !== userId) {
+    // Changing accounts requires explicit opt-in before transferring a token.
+    await SecureStore.deleteItemAsync(KEY);
+    await SecureStore.setItemAsync(OPT_OUT, userId);
+    return;
   }
   const permission = await loadNotifications().getPermissionsAsync();
-  if (!permission.granted) { await disablePush(); return; }
+  if (!permission.granted) {
+    if (saved) await disablePush(false);
+    return;
+  }
+  // Repair missing registrations after login/reinstall when OS permission is already granted.
   await enablePush(false);
 }

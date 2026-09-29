@@ -161,7 +161,8 @@ export function CatalogCard({
       style={({ pressed }) => [
         styles.panel,
         {
-          height: "100%",
+          // Grow within the grid row without a percentage-height dependency.
+          flexGrow: 1,
           backgroundColor: theme.backgroundElement,
           borderColor: theme.border,
           opacity: pressed ? 0.75 : 1,

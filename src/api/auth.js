@@ -106,7 +106,7 @@ export const logout = async () => {
   if (Platform.OS !== "web") {
     try {
       const { disablePush } = await import("@/notifications/push");
-      await disablePush();
+      await disablePush(false);
     } catch { console.warn("Phone alert deregistration could not reach the server."); }
   }
   if (Platform.OS !== "web") {

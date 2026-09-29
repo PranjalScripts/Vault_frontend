@@ -4,13 +4,14 @@ export function useSettingsPalette() {
   const dark = useColorScheme() === 'dark';
   return {
     dark,
-    background: dark ? '#121815' : '#F7F7F4',
-    card: dark ? '#1C2520' : '#FFFFFF',
-    inset: dark ? '#232E28' : '#F4F6F5',
-    border: dark ? '#344139' : '#E3E8E5',
-    text: dark ? '#F6F8F6' : '#0C1013',
-    secondary: dark ? '#ADB7B0' : '#70727B',
-    accent: dark ? '#8DC7AA' : '#245F4B',
-    mint: dark ? '#2B4337' : '#E5F2EC',
+    background: dark ? '#061110' : '#F3F7F5',
+    card: dark ? '#0D1B19' : '#FFFFFF',
+    inset: dark ? '#142421' : '#EDF4F0',
+    border: dark ? '#213630' : '#DCE7E2',
+    text: dark ? '#F5FAF7' : '#14251F',
+    secondary: dark ? '#B2C2CD' : '#536A63',
+    accent: dark ? '#46DEAB' : '#15815D',
+    danger: dark ? '#FF7983' : '#BA3542',
+    mint: dark ? '#113B2E' : '#E0F4EB',
   };
 }

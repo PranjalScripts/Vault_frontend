@@ -9,7 +9,7 @@ import { useVault } from "@/contexts/vaultContext";
 import { useTheme } from "@/hooks/use-theme";
 import { useSettingsPalette } from "@/hooks/use-settings-palette";
 
-export function ChangeVaultPassword() {
+export function ChangeVaultPassword({ renderTrigger }: { renderTrigger?: (open: () => void, disabled: boolean) => React.ReactNode } = {}) {
   const { showSuccess } = useFeedbackModal();
   const baseTheme = useTheme();
   const p = useSettingsPalette();
@@ -51,8 +51,8 @@ export function ChangeVaultPassword() {
   const strength = !newPassword ? 0 : newPassword.length < 6 ? 1 : newPassword.length < 10 || variety < 2 ? 2 : newPassword.length < 14 || variety < 3 ? 3 : 4;
   const strengthLabel = ['Weak', 'Weak', 'Fair', 'Good', 'Strong'][strength];
 
-  return <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Change vault password" accessibilityState={{ expanded: open, disabled: saving }} disabled={saving}
+  return <View style={renderTrigger ? undefined : [styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+    {renderTrigger ? renderTrigger(() => { clear(); setOpen(true); }, saving) : <Pressable accessibilityRole="button" accessibilityLabel="Change vault password" accessibilityState={{ expanded: open, disabled: saving }} disabled={saving}
       onPress={() => { clear();  setOpen(true); }} style={({ pressed }) => [styles.row, { opacity: pressed ? 0.75 : 1 }]}>
       <View style={[styles.icon, { backgroundColor: theme.accentMuted }]}><Feather name="key" size={25} color={theme.accent} /></View>
       <View style={styles.copy}>
@@ -60,7 +60,7 @@ export function ChangeVaultPassword() {
         <Text style={[styles.detail, { color: theme.textSecondary }]}>Update the password used to unlock your passcodes.</Text>
       </View>
       <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-    </Pressable>
+    </Pressable>}
     <Modal visible={open} animationType="none" presentationStyle="fullScreen" onRequestClose={close}>
       <SafeAreaView style={[styles.screen, { backgroundColor: p.background }]}>
         <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
