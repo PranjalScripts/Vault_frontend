@@ -31,7 +31,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
 import { useThemePreferenceReady } from "@/state/theme-preference";
-const PROTECTED_ROUTES = ["interview", "subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games", "notifications", "reminders", "updates"];
+const PROTECTED_ROUTES = ["interview", "subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games", "puzzles", "notifications", "reminders", "updates", "push-test"];
 
 // Google redirects to the origin on web, so completion must run on every route.
 // Expo validates the stored redirect URL; AuthSession validates OAuth state.
@@ -117,8 +117,9 @@ export default function RootLayout() {
    */
 
   const currentRoute = segments[0];
-  const isPublicPuzzle = segments.length === 3 && segments[0] === "games" && segments[1] === "puzzles" && segments[2] === "[id]";
-  const isProtectedRoute = !isPublicPuzzle && !!currentRoute && PROTECTED_ROUTES.includes(currentRoute);
+  // Shared puzzle detail URLs are public; the puzzle catalog remains private.
+  const isSharedPuzzleRoute = currentRoute === "puzzles" && segments.length > 1;
+  const isProtectedRoute = !!currentRoute && PROTECTED_ROUTES.includes(currentRoute) && !isSharedPuzzleRoute;
   const redirectTarget = !isAuthenticated && isProtectedRoute
     ? "/"
     : isAuthenticated && !currentRoute

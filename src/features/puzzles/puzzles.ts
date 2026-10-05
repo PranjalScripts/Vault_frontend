@@ -1290,3 +1290,11 @@ export const puzzles: Puzzle[] = [
 
 export const getPuzzleById = (id: string): Puzzle | undefined =>
   puzzles.find(puzzle => puzzle.id === id);
+
+/** Pick one puzzle per local calendar day, consistently across app launches. */
+export function getDailyPuzzle(date = new Date()): Puzzle {
+  const day = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  let hash = 2166136261;
+  for (const char of day) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return puzzles[(hash >>> 0) % puzzles.length];
+}

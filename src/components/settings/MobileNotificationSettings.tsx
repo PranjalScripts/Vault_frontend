@@ -16,9 +16,9 @@ const categories: { key: keyof Pick<Preferences, 'tasks' | 'study' | 'interview'
   { key: 'updates', title: 'App updates', description: 'New Vault versions for your registered devices.', icon: 'download-outline', tone: 'blue' },
   { key: 'games', title: 'Games', description: 'A daily reminder unless you have completed a game or puzzle today.', icon: 'game-controller-outline' },
 ];
-export default function MobileNotificationSettings({ preferences, busy, push, available, pushAvailable, error, message, save, changePush, retry }: {
+export default function MobileNotificationSettings({ preferences, busy, push, available, pushAvailable, error, message, save, changePush, testPush, pushStatus, pushError, pushDiagnostics, retry }: {
   preferences: Preferences | null; busy: boolean; push: boolean; available: boolean; pushAvailable: boolean;
-  error: string; message: string; save: (patch: Partial<Preferences>) => Promise<void>; changePush: () => Promise<void>; retry: () => void;
+  error: string; message: string; save: (patch: Partial<Preferences>) => Promise<void>; changePush: () => Promise<void>; testPush: () => Promise<void>; pushStatus: string; pushError: string; pushDiagnostics: any; retry: () => void;
 }) {
   const p = useSettingsPalette();
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -30,6 +30,7 @@ export default function MobileNotificationSettings({ preferences, busy, push, av
   return <View style={{ gap: 12 }}>
     <SettingsRow compact title="Automatic notifications" description="Reminders arrive in your inbox on every device." icon="notifications-outline"
       trailing={<SettingsSwitch label="Automatic notifications" value={preferences.enabled} disabled={busy} onChange={value => void save({ enabled: value })} />} />
+    {!!pushDiagnostics && <Text style={{ color: p.secondary, fontSize: 12 }}>Push service: {pushDiagnostics.configured ? 'ready' : 'not configured'} · Worker: {pushDiagnostics.worker?.online ? 'online' : 'offline'} · Devices: {pushDiagnostics.devices?.length || 0} · Pending: {pushDiagnostics.pending || 0} · Failed: {pushDiagnostics.failed || 0}</Text>}
     <View style={card}>
       {categories.map(item => <View key={item.key}>
         <SettingsRow {...item} compact borderless trailing={<SettingsSwitch label={item.title} value={preferences[item.key]} disabled={busy || !preferences.enabled} onChange={value => void save({ [item.key]: value })} />} />
@@ -38,6 +39,9 @@ export default function MobileNotificationSettings({ preferences, busy, push, av
       <SettingsRow compact borderless title="Phone alerts on this device" description="Get alerts even when Vault is closed. Your phone will ask permission." icon="call-outline"
         trailing={<SettingsSwitch label="Phone alerts on this device" value={push} disabled={busy} onChange={() => void changePush()} />} />
     </View>
+    <Pressable accessibilityRole="button" disabled={busy} onPress={() => void testPush()} style={{ minHeight: 48, borderRadius: 14, backgroundColor: p.mint, alignItems: 'center', justifyContent: 'center', opacity: busy ? .55 : 1 }}><Text style={{ color: p.accent, fontWeight: '700' }}>{busy ? 'Sending…' : 'Send test push to this device'}</Text></Pressable>
+    {!!pushStatus && <Text accessibilityLiveRegion="polite" style={{ color: p.accent, fontSize: 13 }}>{pushStatus}</Text>}
+    {!!pushError && <Text accessibilityRole="alert" style={{ color: p.danger, fontSize: 13 }}>{pushError}</Text>}
     {!!error && <Text accessibilityRole="alert" style={{ color: p.danger, fontSize: 13, lineHeight: 19 }}>{error}</Text>}
     {!!message && <Text accessibilityLiveRegion="polite" style={{ color: p.accent, fontSize: 13 }}>{message}</Text>}
     {(!available || !pushAvailable) && <Text style={{ color: p.secondary, fontSize: 12, lineHeight: 18 }}>Some alerts are temporarily unavailable. Your preferences are saved.</Text>}

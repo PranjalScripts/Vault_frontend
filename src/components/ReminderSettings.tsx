@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Platform,
@@ -14,7 +15,11 @@ import { useSettingsPalette } from "@/hooks/use-settings-palette";
 import {
   disablePush,
   enablePush,
+  enablePushForPlatform,
   pushRegistration,
+  webPushRegistration,
+  sendPushTest,
+  webPushPermissionGranted,
 } from "@/notifications/push";
 import { getAuthUser } from "@/api/auth";
 
@@ -36,7 +41,16 @@ export type Preferences = {
   quietStart: number;
   quietEnd: number;
 };
+function pushFailureMessage(failure: unknown) {
+  const response = (failure as { response?: { status?: number; data?: { message?: string; code?: string } } })?.response;
+  if (response?.status === 400 && response.data?.message === 'Invalid ID')
+    return 'The backend is out of date: it does not have the browser push-status route yet. Deploy the latest Backend, then retry.';
+  if (response?.data?.message)
+    return `${response.data.message}${response.data.code ? ` (${response.data.code})` : ''} · HTTP ${response.status || 'error'}`;
+  return failure instanceof Error ? failure.message : 'Push setup failed.';
+}
 export default function ReminderSettings({ mobile = false }: { mobile?: boolean } = {}) {
+  const router = useRouter();
   const p = useSettingsPalette();
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [preferences, setPreferences] = useState<Preferences | null>(null),
@@ -46,6 +60,8 @@ export default function ReminderSettings({ mobile = false }: { mobile?: boolean 
   const [push, setPush] = useState(false),
     [available, setAvailable] = useState(true),
     [pushAvailable, setPushAvailable] = useState(false);
+  const [pushStatus, setPushStatus] = useState(''), [pushError, setPushError] = useState('');
+  const [pushDiagnostics, setPushDiagnostics] = useState<any>(null);
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -55,14 +71,15 @@ export default function ReminderSettings({ mobile = false }: { mobile?: boolean 
         setPreferences(response.data.data);
         setAvailable(response.data.automaticAvailable);
         setPushAvailable(response.data.pushAvailable);
+        try { setPushDiagnostics((await forceRefresh('/notifications/push-status')).data.data); } catch {}
         const [registration, user] = await Promise.all([
-          pushRegistration(),
+          Platform.OS === 'web' ? webPushRegistration() : pushRegistration(),
           getAuthUser(),
         ]);
+        const permissionGranted = Platform.OS === 'web' ? await webPushPermissionGranted() : !!registration;
         if (active)
           setPush(
-            !!registration &&
-              registration.userId === String(user?._id || user?.id),
+            !!registration && registration.userId === String(user?._id || user?.id) && (Platform.OS !== 'web' || permissionGranted),
           );
       } catch {
         if (active)
@@ -75,6 +92,15 @@ export default function ReminderSettings({ mobile = false }: { mobile?: boolean 
       active = false;
     };
   }, [loadAttempt]);
+  const testPush = async () => {
+    setBusy(true); setPushError(''); setPushStatus('');
+    try {
+      await sendPushTest();
+      setPushStatus('Push provider accepted the test. Check this device’s notification tray; provider acceptance cannot confirm OS display.');
+    } catch (failure) {
+      setPushError(pushFailureMessage(failure));
+    } finally { setBusy(false); }
+  };
   const save = async (patch: Partial<Preferences>) => {
     if (!preferences || busy) return;
     setBusy(true);
@@ -96,7 +122,7 @@ export default function ReminderSettings({ mobile = false }: { mobile?: boolean 
     setMessage("");
     try {
       if (push) await disablePush();
-      else await enablePush();
+      else await enablePushForPlatform();
       setPush(!push);
       setMessage(
         push
@@ -104,17 +130,13 @@ export default function ReminderSettings({ mobile = false }: { mobile?: boolean 
           : "Phone alerts enabled on this device.",
       );
     } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : "Could not update phone alerts.",
-      );
+      setError(pushFailureMessage(failure));
     } finally {
       setBusy(false);
     }
   };
   if (mobile) return <MobileNotificationSettings preferences={preferences} busy={busy} push={push} available={available} pushAvailable={pushAvailable}
-    error={error} message={message} save={save} changePush={changePush} retry={() => { setError(''); setLoadAttempt(value => value + 1); }} />;
+    error={error} message={message} save={save} changePush={changePush} testPush={testPush} pushStatus={pushStatus} pushError={pushError} pushDiagnostics={pushDiagnostics} retry={() => { setError(''); setLoadAttempt(value => value + 1); }} />;
   const row = (
     title: string,
     description: string,
@@ -184,6 +206,7 @@ export default function ReminderSettings({ mobile = false }: { mobile?: boolean 
           configuration. Your preferences are saved.
         </Text>
       )}
+      {!!pushDiagnostics && <Text style={{ color: p.secondary, fontSize: 12 }}>Push service: {pushDiagnostics.configured ? 'ready' : 'not configured'} · Worker: {pushDiagnostics.worker?.online ? 'online' : 'offline'} · Devices: {(pushDiagnostics.devices || []).map((d: any) => `${d.platform}/${d.provider} (${d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleDateString() : 'never'})`).join(', ') || 'none'} · Pending: {pushDiagnostics.pending || 0} · Failed: {pushDiagnostics.failed || 0}{Platform.OS === 'web' ? ` · Web push: ${pushDiagnostics.webPushConfigured ? 'ready' : 'not configured'}` : ''}</Text>}
       {!preferences && !error && <ActivityIndicator color={p.accent} />}
       {preferences && (
         <>
@@ -260,6 +283,17 @@ export default function ReminderSettings({ mobile = false }: { mobile?: boolean 
               () => void changePush(),
               false,
             )}
+          {Platform.OS === "web" && row(
+            "Browser alerts on this browser",
+            push ? "Browser permission and push registration are active on this browser." : "Allow browser notifications and register this browser for push alerts.",
+            push,
+            () => void changePush(),
+            false,
+          )}
+          <Pressable accessibilityRole="button" disabled={busy} onPress={() => void testPush()} style={{ minHeight: 44, justifyContent: 'center', opacity: busy ? .55 : 1 }}><Text style={{ color: p.accent }}>{busy ? 'Sending…' : 'Send test push to this device'}</Text></Pressable>
+          <Pressable accessibilityRole="link" disabled={busy} onPress={() => router.push('/push-test' as never)} style={{ minHeight: 40, justifyContent: 'center' }}><Text style={{ color: p.accent, fontSize: 12 }}>Open push test and permission checker →</Text></Pressable>
+          {!!pushStatus && <Text style={{ color: p.accent, fontSize: 12 }}>{pushStatus}</Text>}
+          {!!pushError && <Text accessibilityRole="alert" style={{ color: '#B42318', fontSize: 12 }}>{pushError}</Text>}
           {(["agendaHour", "gameHour", "streakHour"] as const).map(
             (key, index) => (
               <View key={key} style={{ gap: 8 }}>

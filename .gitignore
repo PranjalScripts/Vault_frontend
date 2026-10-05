@@ -52,3 +52,5 @@ example
 build
 android
 ios
+.vercel
+tests

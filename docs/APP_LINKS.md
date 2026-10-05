@@ -2,7 +2,7 @@
 
 Set `EXPO_PUBLIC_WEB_URL` to the actual public HTTPS website origin in both Android and web builds. HTTP development origins do not register verified App Links.
 
-Rebuild native configuration with `npx expo prebuild --platform android`, then build/install a new release APK. Existing installations need this update before HTTPS links can open automatically. Expo Router handles `/share?token=…`, `/puzzles/:id`, and legacy `/games/puzzles/:id` directly; these routes allow public access.
+Rebuild native configuration with `npx expo prebuild --platform android`, then build/install a new release APK. Existing installations need this update before HTTPS links can open automatically. Expo Router handles `/share?token=…`, `/puzzles/:id`, and legacy `/games/puzzles/:id` directly. Puzzle detail links remain public; the `/puzzles` catalog requires sign-in.
 
 Deploy `public/.well-known/assetlinks.json` at the same website origin. It must return JSON over HTTPS without redirects. Its SHA-256 certificate fingerprint was read from the existing `android/app/build/outputs/apk/release/app-release.apk`. That APK currently uses the Android debug signing certificate. When changing signing keys or distributing through Play App Signing, replace/add the actual distribution certificate fingerprint.
 

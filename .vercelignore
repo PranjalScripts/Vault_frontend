@@ -1,0 +1,12 @@
+.git
+.vercel
+.expo
+node_modules
+dist
+build
+android
+ios
+.env*
+*service-account*.json
+public/downloads/*.apk
+tests

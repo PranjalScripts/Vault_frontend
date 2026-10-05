@@ -1,8 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "npx expo export -p web",
+  "buildCommand": "npx expo export -p web && cp public/push-sw.js dist/push-sw.js",
   "outputDirectory": "dist",
+  "headers": [
+    { "source": "/push-sw.js", "headers": [{ "key": "Service-Worker-Allowed", "value": "/" }, { "key": "Content-Type", "value": "application/javascript; charset=utf-8" }] }
+  ],
   "devCommand": "npx expo start --web",
   "cleanUrls": true,
   "rewrites": [

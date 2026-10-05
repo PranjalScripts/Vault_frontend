@@ -19,6 +19,7 @@ import {
   TodoPreview,
 } from "@/components/dashboard/DashboardPreviews";
 import { getPasscodes, getSubjects, getTodos, updateTodo } from "@/api/api";
+import API from "@/api/client";
 import type { Todo } from "@/features/todos/features/types";
 import type { Passcode, RawPasscode } from "@/features/passcodes/types";
 import { isEncryptedField } from "@/features/passcodes/utils/passcodeCrypto";
@@ -36,6 +37,7 @@ type DashboardData = {
   totalTopics: number;
   passcodes: Passcode[];
   totalPasscodes: number;
+  streak: number;
 };
 const initialData: DashboardData = {
   todos: [],
@@ -46,10 +48,8 @@ const initialData: DashboardData = {
   totalTopics: 0,
   passcodes: [],
   totalPasscodes: 0,
+  streak: 0,
 };
-
-// TODO: Replace this adapter when streak tracking is added to the backend.
-const getDashboardStreak = () => 0;
 
 export default function DashboardScreen() {
   const { showSuccess, showError } = useFeedbackModal();
@@ -82,12 +82,13 @@ export default function DashboardScreen() {
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
-    const [allTodosResult, completedResult, subjectsResult, passcodesResult] =
+    const [allTodosResult, completedResult, subjectsResult, passcodesResult, streakResult] =
       await Promise.allSettled([
         getTodos({ page: 1, limit: 20 }),
         getTodos({ page: 1, limit: 1, status: "completed" }),
         getSubjects(),
         getPasscodes({ page: 1, limit: 3, sort: "newest" }),
+        API.get('/notifications/streak'),
       ]);
     try {
       const todoResponse =
@@ -102,6 +103,7 @@ export default function DashboardScreen() {
         passcodesResult.status === "fulfilled"
           ? passcodesResult.value.data
           : {};
+      const streak = streakResult.status === 'fulfilled' ? Number(streakResult.value.data?.data?.current) || 0 : 0;
       const subjects: DashboardSubject[] = Array.isArray(subjectResponse.data)
         ? subjectResponse.data
         : [];
@@ -129,6 +131,7 @@ export default function DashboardScreen() {
         passcodes,
         totalPasscodes:
           passcodeResponse.pagination?.total ?? rawPasscodes.length,
+        streak,
       });
     } catch (error) {
       console.log("DASHBOARD DATA ERROR:", error);
@@ -209,8 +212,8 @@ export default function DashboardScreen() {
       },
       {
         title: "Today's Streak",
-        value: getDashboardStreak(),
-        detail: "Days in a row",
+        value: data.streak,
+        detail: data.streak === 1 ? "Day in a row" : "Days in a row",
         icon: "🔥",
         accent: "#F29B18",
         lightTint: "#FFF8E9",

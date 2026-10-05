@@ -50,3 +50,62 @@ test('account change requires explicit opt-in before transferring token ownershi
   assert.equal(calls.length, 0);
   await api.enablePush(false); assert.equal(calls.length, 1);
 });
+
+function setupWeb(permission = 'default', saved = null) {
+  const oldGlobals = new Map();
+  const setGlobal = (key, value) => {
+    oldGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  };
+  const storage = new Map();
+  if (saved) storage.set('vault-web-push-device', JSON.stringify(saved));
+  const calls = [], browserCalls = [];
+  const notification = {
+    permission,
+    requestPermission: async () => { browserCalls.push('requestPermission'); notification.permission = 'granted'; return 'granted'; },
+  };
+  const subscription = { endpoint: 'https://push.example/sub', keys: { p256dh: 'key', auth: 'auth' } };
+  const workerRegistration = { pushManager: {
+    getSubscription: async () => null,
+    subscribe: async options => { browserCalls.push({ subscribe: true, hasApplicationKey: !!options.applicationServerKey }); return subscription; },
+  } };
+  const serviceWorker = { register: async path => { browserCalls.push({ register: path }); return workerRegistration; }, ready: Promise.resolve(), getRegistration: async () => workerRegistration };
+  setGlobal('window', { Notification: notification, PushManager: function PushManager() {}, isSecureContext: true });
+  setGlobal('navigator', { serviceWorker });
+  setGlobal('Notification', notification);
+  setGlobal('PushManager', function PushManager() {});
+  setGlobal('localStorage', { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) });
+  setGlobal('atob', value => Buffer.from(value, 'base64').toString('binary'));
+  const api = loader(path.join(__dirname, '../src/notifications'), {
+    'react-native': { Platform: { OS: 'web' } },
+    'expo-device': { isDevice: false }, 'expo-constants': { default: { expoConfig: {} } },
+    'expo-secure-store': { getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} },
+    '@/api/auth': { getAuthUser: async () => ({ id: 'owner' }) },
+    '@/api/client': { default: {
+      get: async () => ({ data: { data: { webPushConfigured: true, webPushPublicKey: 'AQ'.repeat(42) } } }),
+      post: async (url, data) => { calls.push({ url, data }); return { data: { data: { id: 'a'.repeat(24) } } }; },
+      delete: async () => {},
+    } },
+    './notificationModule': { loadNotifications: () => ({}) },
+  })('push');
+  return { api, calls, browserCalls, storage, cleanup: () => {
+    for (const [key, descriptor] of oldGlobals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+    }
+  } };
+}
+test('web opt-in requests browser permission from the explicit action and registers a VAPID subscription', async t => {
+  const { api, calls, browserCalls, storage, cleanup } = setupWeb(); t.after(cleanup);
+  await api.enablePushForPlatform();
+  assert.equal(browserCalls[0], 'requestPermission');
+  assert.deepEqual(browserCalls.find(call => typeof call === 'object' && call.register), { register: '/push-sw.js' });
+  assert.equal(calls[0].data.provider, 'webpush');
+  assert.equal(calls[0].data.platform, 'web');
+  assert.equal(JSON.parse(calls[0].data.token).endpoint, 'https://push.example/sub');
+  assert.equal(JSON.parse(storage.get('vault-web-push-device')).userId, 'owner');
+});
+test('web test push targets the registered browser instead of another signed-in device', async t => {
+  const { api, calls, cleanup } = setupWeb('granted', { id: 'b'.repeat(24), userId: 'owner' }); t.after(cleanup);
+  await api.sendPushTest();
+  assert.deepEqual(calls[0], { url: '/notifications/push-test', data: { deviceId: 'b'.repeat(24) } });
+});

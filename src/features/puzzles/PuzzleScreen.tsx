@@ -31,7 +31,7 @@ function PuzzleDetail({ puzzle }: { puzzle?: Puzzle }) {
   const next = puzzles[index + 1];
   return <PuzzleFrame authenticated={access.authenticated === true}>
     <View testID="puzzle-detail" style={{ width: '100%', maxWidth: 720, paddingHorizontal: 16, alignSelf: 'center', gap: 16, paddingBottom: 20 }}>
-      <GameBack backLabel={'Back to Puzzles'} onPress={() => router.replace('/puzzles')} />
+      <GameBack backLabel={access.authenticated ? 'Back to Puzzles' : 'Sign in'} onPress={() => access.authenticated ? router.replace('/puzzles') : login()} />
       {!puzzle ? <>
         <Text accessibilityRole="header" style={heading}>Puzzle not found</Text>
         <Text style={textStyle}>Return to Puzzles to choose one of the available puzzles.</Text>
