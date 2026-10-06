@@ -65,6 +65,9 @@ export const saveAuthToken = async (token, user = null) => {
     }
 
     notifyAuthChange(true);
+    void import('@/notifications/push')
+      .then(({ refreshPushRegistration }) => refreshPushRegistration())
+      .catch(() => console.warn('Push registration will refresh when Vault is opened again.'));
   } catch (error) {
     setAuthToken(null);
     throw error;
@@ -103,12 +106,10 @@ export const getAuthUser = async () => {
 };
 
 export const logout = async () => {
-  if (Platform.OS !== "web") {
-    try {
-      const { disablePush } = await import("@/notifications/push");
-      await disablePush(false);
-    } catch { console.warn("Phone alert deregistration could not reach the server."); }
-  }
+  try {
+    const { disablePush } = await import("@/notifications/push");
+    await disablePush(false);
+  } catch { console.warn("Push alert deregistration could not reach the server."); }
   if (Platform.OS !== "web") {
     try {
       const { clearLocalReminders } = await import("@/notifications/reminders");
@@ -118,6 +119,11 @@ export const logout = async () => {
       console.warn("Signed out, but local notification cleanup failed. Previously scheduled reminders may remain until the app can clear them.");
     }
   }
+  try {
+    // Revoke this exact login before clearing its bearer token. A request marked
+    // as reminder sync cannot recursively invoke logout if the token already expired.
+    await API.delete('/auth/sessions/current', { timeout: 10000, __reminderSync: true });
+  } catch { console.warn('This device session could not be revoked on the server.'); }
   try {
     setAuthToken(null);
     clearApiCache();

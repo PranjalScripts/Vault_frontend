@@ -129,7 +129,18 @@ export function refreshPushRegistration(): Promise<void> {
   return refreshing;
 }
 async function refreshRegistration() {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web') {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
+    const user = await getAuthUser(), userId = String(user?._id || user?.id || '');
+    const saved = await webPushRegistration();
+    if (!userId || !saved || saved.userId !== userId) return;
+    const registration = await navigator.serviceWorker.getRegistration('/') || await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return;
+    const response = await API.post('/notifications/devices', { token: JSON.stringify(subscription), platform: 'web', provider: 'webpush' }, { timeout: 10000 });
+    localStorage.setItem(webKey, JSON.stringify({ id: response.data.data.id, userId }));
+    return;
+  }
   if (!Device.isDevice) return;
   const user = await getAuthUser();
   const userId = String(user?._id || user?.id || '');

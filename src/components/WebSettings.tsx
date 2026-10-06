@@ -55,14 +55,14 @@ export function WebSettings() {
   const theme = useTheme();
   const preference = useThemePreference();
   const router = useRouter();
-  const { section: requestedSection, notificationId } = useLocalSearchParams<{ section?: string; notificationId?: string }>();
+  const { section: requestedSection } = useLocalSearchParams<{ section?: string }>();
   const wide = useWindowDimensions().width >= 1050;
   const [section, setSection] =
     useState<(typeof sections)[number]["id"]>(() => sections.find(item => item.id === requestedSection)?.id || "appearance");
   useEffect(() => {
     const target = sections.find(item => item.id === requestedSection);
     if (target) setSection(target.id);
-  }, [requestedSection, notificationId]);
+  }, [requestedSection]);
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const selected = sections.find((item) => item.id === section)!;

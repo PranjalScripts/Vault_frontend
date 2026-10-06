@@ -19,7 +19,7 @@ const pages = {
   security: { title: 'Security', subtitle: 'Keep your data safe.' },
   notifications: { title: 'Notifications', subtitle: 'Stay on track, everywhere.' },
   appearance: { title: 'Appearance', subtitle: 'Choose your theme and visual style.' },
-  devices: { title: 'Login activity', subtitle: 'Recognize every sign-in.' },
+  devices: { title: 'Devices & login activity', subtitle: 'Manage active sessions and recognize every sign-in.' },
   lock: { title: 'App lock', subtitle: 'A little extra peace of mind.' },
 } as const;
 type Page = keyof typeof pages;
@@ -29,7 +29,7 @@ export default function MobileSettings() {
   const p = useSettingsPalette();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { section, notificationId } = useLocalSearchParams<{ section?: string; notificationId?: string }>();
+  const { section } = useLocalSearchParams<{ section?: string }>();
   const page: Page = section && Object.hasOwn(pages, section) ? section as Page : 'home';
   const { title, subtitle } = pages[page];
   const preference = useThemePreference();
@@ -57,7 +57,7 @@ export default function MobileSettings() {
       </Pressable>
       <View style={{ flex: 1, gap: 3 }}><Text accessibilityRole="header" style={[styles.heading, { color: p.text }]}>{title}</Text><Text style={[styles.subtitle, { color: p.secondary }]}>{subtitle}</Text></View>
     </View>
-    <ScrollView key={`${page}:${notificationId || ''}`} style={{ flex: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
+    <ScrollView key={page} style={{ flex: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
       {page === 'home' && <>
         <ImageBackground source={require('@/assets/images/settings-mountain-vault.png')} resizeMode="cover" style={[styles.banner, { borderColor: p.dark ? '#2A5140' : '#9DBFAD' }]} imageStyle={{ borderRadius: 19 }} accessibilityIgnoresInvertColors>
           <View style={styles.bannerCopy}><Text style={styles.bannerTitle}>Your space.{"\n"}Your rules.</Text><Text style={styles.bannerDescription}>Customize, secure and{"\n"}stay productive.</Text></View>
@@ -70,9 +70,8 @@ export default function MobileSettings() {
       {page === 'security' && <>
         <AppLockSettings />
         <ChangeVaultPassword renderTrigger={(onPress, disabled) => <SettingsRow compact title="Change vault password" description="Update the password used to unlock your passcodes." icon="key-outline" onPress={onPress} disabled={disabled} />} />
-        <SettingsRow compact title="Devices & login activity" description="Review the devices used to sign in to Vault and your recent security activity." icon="phone-portrait-outline" tone="neutral" onPress={() => open('devices')}
-          footer={<Text style={{ color: p.accent, fontSize: 13, marginTop: 2 }}>View recent sign-ins</Text>} />
-        {!!notificationId && <SecurityActivity />}
+        <SettingsRow compact title="Signed-in devices" description="Review devices signed in to Vault and sign out any session you no longer use." icon="phone-portrait-outline" tone="neutral" onPress={() => open('devices')}
+          footer={<Text style={{ color: p.accent, fontSize: 13, marginTop: 2 }}>Manage signed-in devices</Text>} />
         <View style={[styles.divider, { backgroundColor: p.border }]} />
         <SettingsRow compact borderless danger title={signingOut ? 'Logging out…' : 'Logout'} description="Sign out from your account." icon="log-out-outline" tone="red" disabled={signingOut} onPress={() => void signOut()} />
       </>}
