@@ -44,7 +44,13 @@ export default function NotificationsScreen() {
     setBusy(true); setError('');
     try {
       await API.patch(`/notifications/${item._id}/read`);
-      void refresh(); router.push(safeNotificationRoute(item.route, item._id) as never);
+      setItems(current => unreadOnly
+        ? current.filter(currentItem => currentItem._id !== item._id)
+        : current.map(currentItem => currentItem._id === item._id
+          ? { ...currentItem, readAt: new Date().toISOString() }
+          : currentItem));
+      void refresh();
+      router.push(safeNotificationRoute(item.route, item._id) as never);
     } catch { setError('Could not mark this notification as read. Please try again.'); }
     finally { setBusy(false); }
   };
