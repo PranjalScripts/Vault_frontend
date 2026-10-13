@@ -31,6 +31,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { getAuthToken, subscribeToAuthChanges } from "@/api/api";
 
 import { useThemePreferenceReady } from "@/state/theme-preference";
+import AppUpdateManager from "@/updates/AppUpdateManager";
 const PROTECTED_ROUTES = ["interview", "subjects", "todos", "passcodes", "dashboard", "settings", "whatsapp", "search", "games", "puzzles", "notifications", "reminders", "updates", "push-test"];
 
 // Google redirects to the origin on web, so completion must run on every route.
@@ -216,6 +217,7 @@ export default function RootLayout() {
       <VaultProvider>
       <FeedbackModalProvider>
       <NotificationProvider ready={isReady && isAuthenticated}>
+        <AppUpdateManager enabled={startupComplete} />
         <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         <View style={{ flex: 1, backgroundColor: theme.background }} onLayout={() => setRootLaidOut(true)}>
         <View style={{ flex: 1, opacity: routeReady ? 1 : 0 }} pointerEvents={routeReady ? "auto" : "none"}>

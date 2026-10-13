@@ -9,7 +9,7 @@ export function useTodosState() {
    * ========================================================= */
 
   const [todos, setTodos] = useState<
-    import("../features/types").Todo[]
+    import("./types").Todo[]
   >([]);
 
   const [title, setTitle] = useState("");

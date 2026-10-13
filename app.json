@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vault",
     "slug": "vault",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vault",
@@ -13,6 +13,8 @@
     },
     "android": {
       "package": "com.pranjal.vault",
+      "versionCode": 2,
+      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ],
