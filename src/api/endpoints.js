@@ -1,8 +1,13 @@
 import * as Device from "expo-device";
 import { Platform } from "react-native";
+import { getBrowserInstallationId } from "./browserInstallation";
 import API, { forceRefresh } from "./client";
 
-export const googleLogin = (idToken) => API.post("/auth/google", { idToken, device: { model: Device.modelName, os: Device.osName || Platform.OS, osVersion: Device.osVersion } }, { timeout: 60000 });
+export const googleLogin = (idToken) => API.post("/auth/google", {
+  idToken,
+  device: { model: Device.modelName, os: Device.osName || Platform.OS, osVersion: Device.osVersion },
+  ...(Platform.OS === "web" ? { browserInstallationId: getBrowserInstallationId() } : {}),
+}, { timeout: 60000 });
 
 /** @param {{ page?: number, limit?: number, search?: string, sort?: string, view?: "cards" | "full" }} [options] */
 export const getSubjects = (options = {}) =>
