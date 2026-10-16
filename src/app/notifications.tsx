@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
+import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import API, { forceRefresh } from '@/api/client';
 import { AppLayout } from '@/components/AppLayout';
 import { useTheme } from '@/hooks/use-theme';
@@ -12,8 +13,10 @@ const icons = { tasks: 'check-circle', study: 'book-open', interview: 'briefcase
 export default function NotificationsScreen() {
   const theme = useTheme(), router = useRouter(), { owner, refresh, unread } = useNotificationInbox();
   const [items, setItems] = useState<InboxNotification[]>([]), [cursor, setCursor] = useState<string | null>(null);
+  const [readCount, setReadCount] = useState(0);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [confirmDeleteRead, setConfirmDeleteRead] = useState(false), [deleteReadError, setDeleteReadError] = useState('');
   const sequence = useRef(0);
   const load = useCallback(async (before?: string) => {
     if (!owner) return;
@@ -24,12 +27,13 @@ export default function NotificationsScreen() {
       if (ticket !== sequence.current) return;
       setItems(previous => before ? [...new Map([...previous, ...response.data.data].map(item => [item._id, item])).values()] : response.data.data);
       setCursor(response.data.nextCursor);
+      setReadCount(response.data.readCount);
       void refresh();
     } catch { if (ticket === sequence.current) setError('Could not load notifications. Check your connection and try again.'); }
     finally { if (ticket === sequence.current) setLoading(false); }
   }, [owner, unreadOnly, refresh]);
   useEffect(() => {
-    setItems([]); setCursor(null); void load();
+    setItems([]); setCursor(null); setReadCount(0); void load();
     // Invalidate every pending request when account/filter changes or on unmount.
     const requests = sequence;
     return () => { requests.current++; };
@@ -66,6 +70,20 @@ export default function NotificationsScreen() {
     catch { setError('Could not mark notifications as read. Please try again.'); }
     finally { setBusy(false); }
   };
+  const deleteRead = async () => {
+    if (busy) return;
+    setBusy(true); setDeleteReadError('');
+    try {
+      await API.delete('/notifications/read');
+      setConfirmDeleteRead(false);
+      await load();
+      await refresh();
+    } catch {
+      setDeleteReadError('Could not delete read notifications. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
   return <AppLayout scrollable={false} mobileTitle="Notifications" mobileBackAction={() => router.back()} mobileBackLabel="Go back" showMobileSearch={false}>
     <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={theme.accent} />}><View style={{ width: '100%', maxWidth: 780, alignSelf: 'center', padding: 16, gap: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -76,6 +94,7 @@ export default function NotificationsScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {[false, true].map(value => <Pressable key={String(value)} accessibilityRole="button" accessibilityState={{ selected: unreadOnly === value }} onPress={() => setUnreadOnly(value)} style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 22, backgroundColor: unreadOnly === value ? theme.accentMuted : theme.backgroundElement }}><Text style={{ color: theme.accent, fontWeight: '600' }}>{value ? `Unread (${unread})` : 'All'}</Text></Pressable>)}
         <Pressable accessibilityRole="button" disabled={busy || !unread} onPress={() => void markAll()} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8, opacity: busy || !unread ? .5 : 1 }}><Text style={{ color: theme.accent }}>Mark all read</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={busy || loading || unreadOnly || readCount === 0} onPress={() => { setDeleteReadError(''); setConfirmDeleteRead(true); }} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8, opacity: busy || loading || unreadOnly || readCount === 0 ? .5 : 1 }}><Text style={{ color: theme.danger }}>Delete read{readCount > 0 ? ` (${readCount})` : ''}</Text></Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh notifications" disabled={loading} onPress={() => void load()} style={{ padding: 12 }}><Feather name="refresh-cw" size={18} color={theme.accent} /></Pressable>
       </View>
       {!!error && <Text accessibilityRole="alert" style={{ color: theme.text }}>{error}</Text>}
@@ -94,5 +113,6 @@ export default function NotificationsScreen() {
       </Pressable>)}
       {cursor && <Pressable accessibilityRole="button" disabled={loading} onPress={() => void load(cursor)} style={{ padding: 14, alignItems: 'center' }}><Text style={{ color: theme.accent }}>Load older notifications</Text></Pressable>}
     </View></ScrollView>
+    <ConfirmModal visible={confirmDeleteRead} title="Delete read notifications?" message="This removes all read notifications from your inbox on this account. Unread notifications will remain." buttonLabel="Delete read" onClose={() => { if (!busy) { setConfirmDeleteRead(false); setDeleteReadError(''); } }} onConfirm={() => void deleteRead()} busy={busy} error={deleteReadError} />
   </AppLayout>;
 }

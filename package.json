@@ -71,7 +71,9 @@
     "sounds:tap-clash": "node scripts/generate-tap-clash-sounds.cjs",
     "test:path": "node --test tests/path*.test.cjs",
     "test:app-update": "node --test tests/appUpdate.test.cjs",
-    "test:logos": "node --test tests/logos.test.cjs"
+    "test:logos": "node --test tests/logos.test.cjs",
+    "build:release": "node scripts/build-release.cjs",
+    "sync:release": "node scripts/build-release.cjs --sync-only"
   },
   "private": true,
   "expo": {
