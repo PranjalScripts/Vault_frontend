@@ -24,7 +24,8 @@ export default function NotificationObserver({ ready }: { ready: boolean }) {
       const owner = String(user?.id || user?._id);
       if (!active) return;
       Notifications.setNotificationHandler({ handleNotification: async notification => {
-        const own = active && notification.request.content.data.userId === owner;
+        const data = notification.request.content.data;
+        const own = active && (data.userId === owner || data.kind === "apk_update_ready");
         return { shouldPlaySound: own, shouldSetBadge: false, shouldShowBanner: own, shouldShowList: own };
       } });
       let handled = "";
@@ -35,6 +36,7 @@ export default function NotificationObserver({ ready }: { ready: boolean }) {
         const user = await getAuthUser();
         if (!active) return;
         Notifications.clearLastNotificationResponse();
+        if (data.kind === "apk_update_ready") return;
         if (data.userId !== String(user?.id || user?._id)) return;
         if (data.kind === "inbox") {
           let route = '/notifications';

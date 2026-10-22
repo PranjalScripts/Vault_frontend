@@ -12,7 +12,7 @@ export async function getInterviewSubject(subject: string): Promise<InterviewSub
 export async function getInterviewTopic(subject: string, topic: string): Promise<InterviewTopic & { subject: InterviewSubject }> {
   return (await API.get(`${root}/subjects/${encodeURIComponent(subject)}/topics/${encodeURIComponent(topic)}`, fresh)).data.data;
 }
-export async function getInterviewQuestions(params: { subject?: string; topic?: string; search?: string; tag?: string; status?: ProgressFilter; page?: number }): Promise<QuestionPage> {
+export async function getInterviewQuestions(params: { subject?: string; topic?: string; search?: string; tag?: string; status?: ProgressFilter; page?: number; limit?: number }): Promise<QuestionPage> {
   return (await API.get(`${root}/questions`, { params, ...fresh })).data;
 }
 export async function getInterviewQuestion(id: string): Promise<QuestionDetail> {
@@ -27,4 +27,10 @@ export async function markInterviewOpened(id: string): Promise<Progress> {
 }
 export async function updateInterviewProgress(id: string, patch: Partial<Pick<Progress, "revised" | "important">>): Promise<Progress> {
   return (await API.patch(`${root}/questions/${encodeURIComponent(id)}/progress`, patch)).data.data;
+}
+export async function submitInterviewMcqAnswer(id: string, optionId: string): Promise<Progress> {
+  return (await API.patch(`${root}/questions/${encodeURIComponent(id)}/answer`, { optionId })).data.data;
+}
+export async function resetInterviewMcqAnswer(id: string): Promise<Progress> {
+  return (await API.delete(`${root}/questions/${encodeURIComponent(id)}/answer`)).data.data;
 }

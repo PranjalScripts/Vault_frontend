@@ -4,6 +4,8 @@
 
 Subjects and topics come from the API. No Java-specific screens or question content are embedded in the frontend. Planned counts are labeled separately from available questions. The reusable JSON importer and backend API contract are documented in `Backend/INTERVIEW.md`.
 
+The MCQ catalog exposes each Java category as its own topic, so each category has an independent progress summary and question numbering starts at Q1 within that category. Numbers shown in lists and question details are derived from the topic's stable order to avoid gaps from older stored values. The Java source contains 411 questions; stable source IDs are retained by the importer so existing answers and progress remain attached to their questions.
+
 Search is debounced, filter changes reset pagination, and outdated responses are ignored. Screens reload on focus and disable the shared GET cache so progress refreshes when returning from a question or another device. Continue uses server-persisted last-opened progress. Opening a question saves reading position without success feedback; meaningful progress changes use the existing global success/error modal provider, only after the API completes. Failed saves preserve the displayed progress and support retry. Search/navigation/filtering never show success modals.
 
 Layout uses Vault's theme, AppLayout, buttons and panels; mobile cards stack with side gutters. Optional answer sections are omitted when absent. Previous/Next are disabled at subject boundaries. Revised state can be reversed, with revision history retained.

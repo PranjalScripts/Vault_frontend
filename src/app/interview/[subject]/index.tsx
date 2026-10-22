@@ -17,7 +17,7 @@ export default function InterviewSubjectPage() {
       <Panel><ProgressBar stats={data} title={`${data.name} Progress`} /></Panel>
       <ContinueRevision question={data.next} />
       </InterviewGrid>
-      <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.text }]}>Topics</Text>
+      <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.text }]}>{data.slug === "mcq" ? "Categories and Question Sets" : "Topics"}</Text>
       <InterviewGrid>{data.topics.map(topic => <CatalogCard key={topic._id} title={topic.name} stats={topic} planned={topic.plannedQuestionCount} range={topic.questionNumberStart && topic.questionNumberEnd ? `Q${topic.questionNumberStart}–${topic.questionNumberEnd}` : undefined} onPress={() => router.push({ pathname: "/interview/[subject]/[topic]", params: { subject, topic: topic.slug } })} />)}</InterviewGrid>
     </>}
   </InterviewPage>;

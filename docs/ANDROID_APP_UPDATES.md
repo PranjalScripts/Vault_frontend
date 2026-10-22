@@ -37,6 +37,8 @@ No new frontend environment variable is needed. Keep the existing `EXPO_PUBLIC_A
 
 The app verifies the HTTPS URL, metadata shape, successful HTTP 200 download response, non-HTML/non-JSON content, and a non-empty APK file of plausible size before launching Android's installer. Large APK hashing is not implemented; publish only trusted release assets and restrict who can replace them.
 
+When an update prompt appears, **Download in background** downloads the APK with Expo's background-capable file download while Vault is minimized, shows progress in Vault when it is open, and posts a local notification when the APK is ready. Tapping **Install update** still opens Android's installer, which requires user confirmation. Grant Vault notification permission to receive the completion notification. Android battery policies or force-stopping Vault can interrupt background work; this option does not guarantee download continuation after the operating system terminates the app.
+
 ## Signing and installation
 
 Keep Android application ID `com.pranjal.vault` and the existing EAS remote signing credential. Android accepts an update only when its signing certificate matches the installed build. Do not replace the EAS credential. The committed native Gradle release configuration currently names the debug signing config; use the existing EAS remote signing setup for distributable builds, and verify EAS credentials in the account before releasing. This implementation does not modify signing configuration or generate keys.
